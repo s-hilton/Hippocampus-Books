@@ -1,0 +1,10 @@
+# Supabase CLI / GitHub integration config.
+# Values not listed here use Supabase defaults. See https://supabase.com/docs/guides/local-development/cli/config
+project_id = "hippocampus-books"
+
+[auth]
+site_url = "http://localhost:5173"
+additional_redirect_urls = ["http://localhost:5173"]
+
+[auth.email]
+enable_signup = true
