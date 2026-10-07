@@ -1,5 +1,6 @@
 # Supabase CLI / GitHub integration config.
 # Anything not listed uses Supabase's defaults.
+# Deployed to production by the Supabase GitHub integration on every push to `main`.
 # Auth settings (site URL, redirect URLs, providers) are managed in the dashboard for now.
 project_id = "hippocampus-books"
 
