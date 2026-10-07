@@ -1,25 +1,34 @@
-interface Props {
+import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { useTheme } from '../lib/theme'
+
+export default function StarRating({
+  value,
+  onChange,
+}: {
   value: number | null
   onChange: (rating: number | null) => void
-}
-
-export default function StarRating({ value, onChange }: Props) {
+}) {
+  const t = useTheme()
   return (
-    <div className="stars" role="radiogroup" aria-label="Rating">
+    <View style={styles.row} accessibilityRole="radiogroup" accessibilityLabel="Rating">
       {[1, 2, 3, 4, 5].map((n) => (
-        <button
+        <Pressable
           key={n}
-          type="button"
-          role="radio"
-          aria-checked={value === n}
-          aria-label={`${n} star${n > 1 ? 's' : ''}`}
-          className={value !== null && n <= value ? 'star filled' : 'star'}
-          // Clicking the current rating again clears it.
-          onClick={() => onChange(value === n ? null : n)}
+          accessibilityRole="radio"
+          accessibilityState={{ checked: value === n }}
+          accessibilityLabel={`${n} star${n > 1 ? 's' : ''}`}
+          hitSlop={4}
+          // Tapping the current rating again clears it.
+          onPress={() => onChange(value === n ? null : n)}
         >
-          ★
-        </button>
+          <Text style={[styles.star, { color: value !== null && n <= value ? t.star : t.border }]}>★</Text>
+        </Pressable>
       ))}
-    </div>
+    </View>
   )
 }
+
+const styles = StyleSheet.create({
+  row: { flexDirection: 'row', gap: 4, marginTop: 6 },
+  star: { fontSize: 24 },
+})
