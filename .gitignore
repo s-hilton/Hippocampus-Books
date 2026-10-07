@@ -30,7 +30,7 @@ yarn-error.*
 .DS_Store
 *.pem
 
-# local env files
+# local env files (put secrets / personal overrides here, never in .env)
 .env*.local
 
 # typescript
@@ -40,8 +40,6 @@ yarn-error.*
 /ios
 /android
 
-# env files
-.env
 
 # Supabase CLI
 supabase/.branches

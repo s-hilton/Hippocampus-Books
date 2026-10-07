@@ -37,7 +37,7 @@ export default function SignIn() {
         <Text style={[styles.title, { color: t.text }]}>Hippocampus Books</Text>
         {!supabaseConfigured ? (
           <ErrorText>
-            Supabase is not configured. Set EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY (see .env.example).
+            Supabase is not configured. Set EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY (see .env).
           </ErrorText>
         ) : (
           <>
