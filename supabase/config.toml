@@ -1,10 +1,8 @@
 # Supabase CLI / GitHub integration config.
-# Values not listed here use Supabase defaults. See https://supabase.com/docs/guides/local-development/cli/config
+# Anything not listed uses Supabase's defaults.
+# Auth settings (site URL, redirect URLs, providers) are managed in the dashboard for now.
 project_id = "hippocampus-books"
 
-[auth]
-site_url = "http://localhost:5173"
-additional_redirect_urls = ["http://localhost:5173"]
-
-[auth.email]
-enable_signup = true
+[functions.search-books]
+enabled = true
+verify_jwt = true

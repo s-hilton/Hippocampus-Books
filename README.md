@@ -1,24 +1,23 @@
 # Hippocampus Books
 
-A simple book tracker. Search for books, add them to your pile, and track whether you want to read, are reading, or have read each one. Finished books can get a 1–5 star rating.
+A book reading tracker. Search for books (or add them by hand), put them on your pile, and mark each one *Want to read*, *Reading* or *Read*. Finished books get a 1–5 star rating.
 
-**Stack:** React + TypeScript (Vite), Supabase (auth + Postgres), and the [Open Library](https://openlibrary.org/developers/api) search API (free, no key needed).
+Expo (React Native) + Supabase. See [`CLAUDE.md`](CLAUDE.md) for the architecture and conventions.
 
-## Tabs
+## Screens
 
-- **Search**: search Open Library by title, author, or ISBN and add results to your pile.
-- **My Pile**: set each book to *Want to read*, *Reading*, or *Read*. *Read* books show a star rating. Click the current star again to clear it.
+- **Search:** searches your own catalog and Open Library. Tap **Add** to put a book on your pile. If a book can't be found, **Add a book manually**.
+- **My Pile:** filter by status; tap a status to change it. *Read* books show stars (tap the current star again to clear it).
 
-## Local setup
+## Supabase setup (one time)
+
+1. **GitHub integration:** Project Settings → Integrations → GitHub. Connect this repo, set **Supabase directory** to `supabase`, **Production branch** to `main`, and turn on **Deploy to production**. Migrations and the `search-books` Edge Function deploy when changes merge to `main`.
+2. **Auth:** Authentication → Sign In / Providers → Email is on by default. Leave "Confirm email" on or off as you prefer.
+3. **App keys:** copy `.env.example` to `.env` and fill in your project URL and anon (publishable) key. For EAS builds, set the same two variables as EAS environment variables.
+
+## Running
 
 ```bash
 npm install
-cp .env.example .env.local   # fill in your Supabase URL + anon key
-npm run dev                  # http://localhost:5173
+npx expo start        # scan the QR code with Expo Go, or press w for web
 ```
-
-## Supabase
-
-- Schema lives in `supabase/migrations/`. The `pile_books` table has row-level security, so each user only sees their own pile.
-- Sign-in uses email magic links. In the Supabase dashboard → **Authentication → URL Configuration**, add your local (`http://localhost:5173`) and deployed URLs to the redirect allow-list.
-- **GitHub integration:** set **Supabase directory** to `supabase` and **Production branch** to `main`. Migrations merged into `main` deploy to the production project.
