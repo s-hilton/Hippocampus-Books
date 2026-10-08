@@ -33,7 +33,7 @@ import Chip from '../../../components/Chip'
 import ExpandableText from '../../../components/ExpandableText'
 import CommunityTags from '../../../components/CommunityTags'
 import ReviewForm from '../../../components/ReviewForm'
-import StarRating from '../../../components/StarRating'
+import ReviewStars from '../../../components/ReviewStars'
 import { Button, ErrorText, Loading } from '../../../components/ui'
 
 const EDITIONS_PREVIEW = 5
@@ -266,11 +266,8 @@ export default function BookScreen() {
             {entry.status === 'read' &&
               (review ? (
                 <View style={styles.review}>
-                  <StarRating value={review.rating} />
+                  <ReviewStars rating={review.rating} onEdit={() => setReviewOpen(true)} />
                   {review.body && <ExpandableText text={review.body} lines={4} />}
-                  <View style={styles.left}>
-                    <Button variant="link" title="Edit review" onPress={() => setReviewOpen(true)} />
-                  </View>
                 </View>
               ) : (
                 <View style={[styles.left, styles.reviewButton]}>
