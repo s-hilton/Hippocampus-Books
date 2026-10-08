@@ -8,6 +8,7 @@ A book reading tracker (think Goodreads / The StoryGraph). Expo (React Native) a
 
 - **App:** Expo SDK 57, Expo Router, TypeScript strict. Runs on iOS, Android, and web.
 - **Backend:** Supabase: Postgres + Auth (email/password) + Edge Functions.
+- **Config:** `.env` holds the public Supabase URL + publishable key and is committed. Never add secret keys (`service_role` / `sb_secret_...`) to the app or the repo.
 - **Book data:** Open Library, proxied through the `search-books` Edge Function. Books users pick are cached in our `books` table; users can also add books manually (`source = 'user'`).
 
 ## Layout

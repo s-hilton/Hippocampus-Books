@@ -13,7 +13,7 @@ Expo (React Native) + Supabase. See [`CLAUDE.md`](CLAUDE.md) for the architectur
 
 1. **GitHub integration:** Project Settings → Integrations → GitHub. Connect this repo, set **Supabase directory** to `supabase`, **Production branch** to `main`, and turn on **Deploy to production**. Migrations and the `search-books` Edge Function deploy when changes merge to `main`.
 2. **Auth:** Authentication → Sign In / Providers → Email is on by default. Leave "Confirm email" on or off as you prefer.
-3. **App keys:** copy `.env.example` to `.env` and fill in your project URL and anon (publishable) key. For EAS builds, set the same two variables as EAS environment variables.
+3. **App keys:** the project URL and publishable key are in the committed `.env` (they are public by design). Never commit secret keys; put anything private in `.env.local`, which is gitignored.
 
 ## Running
 
