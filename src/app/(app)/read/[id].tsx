@@ -8,7 +8,8 @@ import { daysSpanned, formatDateTime, plural } from '../../../lib/dates'
 import { READ_STATUS_LABELS, type Read, type ReadDetail } from '../../../lib/types'
 import { useTheme, type Theme } from '../../../lib/theme'
 import BookCover from '../../../components/BookCover'
-import ProgressBar from '../../../components/ProgressBar'
+import DatesForm from '../../../components/DatesForm'
+import ProgressBar, { pointLabel } from '../../../components/ProgressBar'
 import ProgressChart from '../../../components/ProgressChart'
 import ProgressForm from '../../../components/ProgressForm'
 import { Button, ErrorText, Loading } from '../../../components/ui'
@@ -20,6 +21,7 @@ export default function ReadScreen() {
   const [read, setRead] = useState<ReadDetail | null | undefined>(undefined) // undefined = loading, null = not found
   const [error, setError] = useState<string | null>(null)
   const [updating, setUpdating] = useState(false)
+  const [editingDates, setEditingDates] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [busy, setBusy] = useState(false)
 
@@ -57,7 +59,8 @@ export default function ReadScreen() {
   const title = read.total > 1 ? `Read ${read.number} of ${read.total}` : 'Your read'
   const stoppedLabel = read.status === 'dnf' ? 'Stopped' : 'Finished'
   const days = read.started_at ? daysSpanned(read.started_at, read.finished_at ?? new Date().toISOString()) : null
-  const pagesRead = read.current_page ?? 0
+  const inPages = read.progress_unit === 'pages'
+  const pagesRead = inPages ? (read.current_page ?? 0) : 0
   const perDay = days && pagesRead > 0 ? Math.round(pagesRead / days) : null
 
   async function finish() {
@@ -127,7 +130,7 @@ export default function ReadScreen() {
         {days !== null && (
           <Fact label={read.finished_at ? 'Took' : 'So far'} value={plural(days, 'day')} t={t} />
         )}
-        {!!read.page_count && read.status !== 'reading' && (
+        {inPages && !!read.page_count && read.status !== 'reading' && (
           <Fact
             label="Pages"
             value={
@@ -138,7 +141,13 @@ export default function ReadScreen() {
             t={t}
           />
         )}
+        {!inPages && read.status === 'dnf' && read.current_page !== null && (
+          <Fact label="Got to" value={`${read.current_page}%`} t={t} />
+        )}
         {perDay !== null && <Fact label="Average" value={`${plural(perDay, 'page')} a day`} t={t} />}
+        <View style={styles.left}>
+          <Button variant="link" title="Edit dates" onPress={() => setEditingDates(true)} />
+        </View>
       </Section>
 
       {read.status === 'reading' && (
@@ -159,10 +168,7 @@ export default function ReadScreen() {
           {[...read.progress].reverse().map((p) => (
             <View key={p.id} style={[styles.logRow, { borderBottomColor: t.border }]}>
               <Text style={{ color: t.muted, flex: 1 }}>{formatDateTime(p.logged_at)}</Text>
-              <Text style={{ color: t.text }}>
-                {`Page ${p.page.toLocaleString()}`}
-                {read.page_count ? ` · ${Math.min(100, Math.round((p.page / read.page_count) * 100))}%` : ''}
-              </Text>
+              <Text style={{ color: t.text }}>{pointLabel(read, p.page)}</Text>
             </View>
           ))}
         </Section>
@@ -184,6 +190,15 @@ export default function ReadScreen() {
         </View>
       )}
 
+      <DatesForm
+        visible={editingDates}
+        read={read}
+        onClose={() => setEditingDates(false)}
+        onSaved={(dates) => {
+          setEditingDates(false)
+          setRead({ ...read, ...dates })
+        }}
+      />
       <ProgressForm
         visible={updating}
         read={read}

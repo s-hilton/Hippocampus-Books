@@ -25,8 +25,9 @@ export interface Read {
   status: ReadStatus
   started_at: string | null // null when marked read without starting it in the app
   finished_at: string | null
-  current_page: number | null
-  page_count: number | null // the reader's edition
+  current_page: number | null // a percent (0-100) when progress_unit is 'percent'
+  page_count: number | null // the reader's edition; null for percent reads
+  progress_unit: 'pages' | 'percent'
 }
 
 /** One logged page update (`reading_progress`). */

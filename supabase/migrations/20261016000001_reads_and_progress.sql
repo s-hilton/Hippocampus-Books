@@ -5,6 +5,11 @@
 -- book read twice has two reads, each with its own dates and progress, and counts twice.
 -- reading_progress logs every page update for a read, for its progress chart.
 --
+-- Progress is in pages, or in percent for a read whose page count isn't known (e.g. an
+-- ebook): progress_unit = 'percent' means current_page and reading_progress.page hold a
+-- percent (0-100) and page_count is null. Percent entered for a read with a page count
+-- is converted to pages by the app.
+--
 -- user_books.status stays the shelf status the app shows and sets. The trigger below
 -- keeps reads in step with it, so every way of changing status (pile, book page, old
 -- app versions) records reads the same way:
@@ -28,10 +33,12 @@ create table public.reads (
   finished_at timestamptz,
   current_page integer check (current_page >= 0),
   page_count integer check (page_count > 0), -- this reader's edition; defaults to the book's
+  progress_unit text not null default 'pages' check (progress_unit in ('pages', 'percent')),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   constraint reads_finished_when_done check ((status = 'reading') = (finished_at is null)),
-  constraint reads_dates_in_order check (finished_at is null or started_at is null or finished_at >= started_at)
+  constraint reads_dates_in_order check (finished_at is null or started_at is null or finished_at >= started_at),
+  constraint reads_percent_has_no_page_count check (progress_unit = 'pages' or (page_count is null and current_page <= 100))
 );
 
 -- At most one read in progress per user per book.
@@ -109,6 +116,7 @@ as $$
 declare
   v_open public.reads;
   v_last public.reads;
+  v_end integer; -- the last page (or 100 for a percent read)
 begin
   if tg_op = 'UPDATE' and old.status = new.status then
     return null;
@@ -134,16 +142,16 @@ begin
 
   elsif new.status in ('read', 'dnf') then
     if v_open.id is not null then
+      v_end := case when v_open.progress_unit = 'percent' then 100 else v_open.page_count end;
       update public.reads
       set status = new.status::text,
           finished_at = greatest(now(), started_at),
-          current_page = case when new.status = 'read' then coalesce(page_count, current_page) else current_page end
+          current_page = case when new.status = 'read' then coalesce(v_end, current_page) else current_page end
       where id = v_open.id;
       -- Finishing reaches the last page: log it so the chart ends at 100%.
-      if new.status = 'read' and v_open.page_count is not null
-         and v_open.current_page is distinct from v_open.page_count then
+      if new.status = 'read' and v_end is not null and v_open.current_page is distinct from v_end then
         insert into public.reading_progress (read_id, user_id, page)
-        values (v_open.id, new.user_id, v_open.page_count);
+        values (v_open.id, new.user_id, v_end);
       end if;
     elsif v_last.id is not null then
       if v_last.status <> new.status::text then
@@ -196,13 +204,18 @@ begin
     raise exception 'You’re already reading this book' using errcode = '22023';
   end if;
 
-  insert into public.reads (user_id, book_id, page_count)
-  select v_uid, p_book_id, coalesce(
-    (select r.page_count from public.reads r
-     where r.user_id = v_uid and r.book_id = p_book_id and r.page_count is not null
-     order by r.created_at desc limit 1),
-    b.page_count)
-  from public.books b where b.id = p_book_id
+  -- Same edition as last time: its page count, or percent if that's how it was tracked.
+  insert into public.reads (user_id, book_id, page_count, progress_unit)
+  select v_uid, p_book_id,
+         case when last.progress_unit = 'percent' then null else coalesce(last.page_count, b.page_count) end,
+         coalesce(last.progress_unit, 'pages')
+  from public.books b
+  left join lateral (
+    select r.page_count, r.progress_unit from public.reads r
+    where r.user_id = v_uid and r.book_id = p_book_id
+    order by r.created_at desc limit 1
+  ) last on true
+  where b.id = p_book_id
   returning id into v_id;
 
   update public.user_books set status = 'reading' where user_id = v_uid and book_id = p_book_id;
@@ -214,10 +227,18 @@ revoke execute on function public.start_reread(uuid) from public, anon;
 grant execute on function public.start_reread(uuid) to authenticated;
 
 ------------------------------------------------------------------------------
--- log_progress: set the page for a read in progress and log it
+-- log_progress: set how far a read in progress is and log it
 ------------------------------------------------------------------------------
+-- p_unit: 'pages' (p_page is a page) or 'percent' (p_page is 0-100; only for reads
+-- without a page count). Null keeps the read's unit. Switching a percent read to pages
+-- needs the page count and converts its logged points.
 
-create or replace function public.log_progress(p_read_id uuid, p_page integer, p_page_count integer default null)
+create or replace function public.log_progress(
+  p_read_id uuid,
+  p_page integer,
+  p_page_count integer default null,
+  p_unit text default null
+)
 returns void
 language plpgsql
 security invoker
@@ -225,15 +246,20 @@ set search_path = ''
 as $$
 declare
   v_read public.reads;
+  v_unit text;
+  v_count integer;
 begin
   if auth.uid() is null then
     raise exception 'Not signed in' using errcode = '42501';
   end if;
   if p_page is null or p_page < 0 then
-    raise exception 'Enter a page number' using errcode = '22023';
+    raise exception 'Enter how far you are' using errcode = '22023';
   end if;
   if p_page_count is not null and p_page_count <= 0 then
     raise exception 'The page count must be more than 0' using errcode = '22023';
+  end if;
+  if p_unit is not null and p_unit not in ('pages', 'percent') then
+    raise exception 'Unknown progress unit' using errcode = '22023';
   end if;
 
   select * into v_read from public.reads where id = p_read_id and user_id = auth.uid();
@@ -243,20 +269,46 @@ begin
   if v_read.status <> 'reading' then
     raise exception 'This read is finished' using errcode = '22023';
   end if;
-  if p_page > coalesce(p_page_count, v_read.page_count, p_page) then
-    raise exception 'That’s past the last page (%)', coalesce(p_page_count, v_read.page_count) using errcode = '22023';
-  end if;
 
-  update public.reads
-  set current_page = p_page, page_count = coalesce(p_page_count, page_count)
-  where id = p_read_id;
+  v_unit := coalesce(p_unit, v_read.progress_unit);
+
+  if v_unit = 'percent' then
+    if p_page > 100 then
+      raise exception 'Enter a percent from 0 to 100' using errcode = '22023';
+    end if;
+    if v_read.progress_unit = 'pages' then
+      if coalesce(p_page_count, v_read.page_count) is not null then
+        raise exception 'This read has a page count; enter a page' using errcode = '22023';
+      end if;
+      if exists (select 1 from public.reading_progress where read_id = p_read_id) then
+        raise exception 'Enter the page count to switch this read to percent' using errcode = '22023';
+      end if;
+    end if;
+    update public.reads
+    set progress_unit = 'percent', page_count = null, current_page = p_page
+    where id = p_read_id;
+  else
+    v_count := coalesce(p_page_count, case when v_read.progress_unit = 'pages' then v_read.page_count end);
+    if v_read.progress_unit = 'percent' then
+      if v_count is null then
+        raise exception 'Enter the page count to track this read in pages' using errcode = '22023';
+      end if;
+      update public.reading_progress set page = round(page * v_count / 100.0) where read_id = p_read_id;
+    end if;
+    if p_page > coalesce(v_count, p_page) then
+      raise exception 'That’s past the last page (%)', v_count using errcode = '22023';
+    end if;
+    update public.reads
+    set progress_unit = 'pages', page_count = v_count, current_page = p_page
+    where id = p_read_id;
+  end if;
 
   insert into public.reading_progress (read_id, page) values (p_read_id, p_page);
 end;
 $$;
 
-revoke execute on function public.log_progress(uuid, integer, integer) from public, anon;
-grant execute on function public.log_progress(uuid, integer, integer) to authenticated;
+revoke execute on function public.log_progress(uuid, integer, integer, text) from public, anon;
+grant execute on function public.log_progress(uuid, integer, integer, text) to authenticated;
 
 ------------------------------------------------------------------------------
 -- Existing shelves: one read for each book being read or already read

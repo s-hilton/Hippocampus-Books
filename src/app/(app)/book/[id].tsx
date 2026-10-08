@@ -335,9 +335,9 @@ export default function BookScreen() {
       </Section>
 
       {reads.length > 0 && (
-        <Section title={timesRead > 1 ? `Your reads · read ${timesRead} times` : 'Your reads'} t={t}>
+        <Section title={reads.length === 1 ? 'Your read' : timesRead > 1 ? `Your reads · read ${timesRead} times` : 'Your reads'} t={t}>
           {[...reads].reverse().map((r) => (
-            <ReadRow key={r.id} read={r} number={reads.indexOf(r) + 1} t={t} />
+            <ReadRow key={r.id} read={r} number={reads.length > 1 ? reads.indexOf(r) + 1 : null} t={t} />
           ))}
         </Section>
       )}
@@ -468,7 +468,7 @@ function Section({ title, t, children }: { title: string; t: Theme; children: Re
 }
 
 /** One read in the book page's list; opens the read page with its dates and progress chart. */
-function ReadRow({ read: r, number, t }: { read: Read; number: number; t: Theme }) {
+function ReadRow({ read: r, number, t }: { read: Read; number: number | null; t: Theme }) {
   const dates =
     r.status === 'reading'
       ? r.started_at && `Started ${formatDate(r.started_at)}`
@@ -476,12 +476,14 @@ function ReadRow({ read: r, number, t }: { read: Read; number: number; t: Theme 
   return (
     <Pressable
       role="link"
-      aria-label={`Read ${number}: ${READ_STATUS_LABELS[r.status]}. ${dates || ''}`}
+      aria-label={`${number ? `Read ${number}: ` : ''}${READ_STATUS_LABELS[r.status]}. ${dates || ''}`}
       onPress={() => router.push(`/read/${r.id}`)}
       style={[styles.readRow, { borderBottomColor: t.border }]}
     >
       <View style={styles.readText}>
-        <Text style={{ color: t.text, fontWeight: '600' }}>{`Read ${number} · ${READ_STATUS_LABELS[r.status]}`}</Text>
+        <Text style={{ color: t.text, fontWeight: '600' }}>
+          {number ? `Read ${number} · ${READ_STATUS_LABELS[r.status]}` : READ_STATUS_LABELS[r.status]}
+        </Text>
         {!!dates && <Text style={{ color: t.muted }}>{dates}</Text>}
       </View>
       <Text style={{ color: t.accent, fontSize: 18 }}>›</Text>

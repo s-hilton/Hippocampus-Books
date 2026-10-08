@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Platform, StyleSheet, View } from 'react-native'
 import Svg, { Circle, Line, Path, Text as SvgText } from 'react-native-svg'
 import { Text } from './Text'
+import { pointLabel } from './ProgressBar'
 import { formatDateTime, formatShortDate } from '../lib/dates'
 import type { ProgressPoint, Read } from '../lib/types'
 import { fontFamily, useTheme } from '../lib/theme'
@@ -37,8 +38,9 @@ export default function ProgressChart({ read, progress }: { read: Read; progress
     return <Text style={{ color: t.muted }}>No progress was logged for this read.</Text>
   }
 
-  // Scales. Percent when we know the length, otherwise pages up to a round number.
-  const total = read.page_count
+  // Scales. Percent when we know the length (or the read is tracked in percent),
+  // otherwise pages up to a round number.
+  const total = read.progress_unit === 'percent' ? 100 : read.page_count
   const value = (page: number) => (total ? Math.min(100, (page / total) * 100) : page)
   const maxPage = Math.max(...points.map((p) => p.page), 1)
   const yMax = total ? 100 : niceCeil(maxPage)
@@ -63,12 +65,12 @@ export default function ProgressChart({ read, progress }: { read: Read; progress
   const area = `${line} L${xy[xy.length - 1][0].toFixed(1)},${y(0)} L${xy[0][0].toFixed(1)},${y(0)} Z`
 
   const current = points[Math.min(selected, points.length - 1)]
-  const readout = `${current.label} · page ${current.page.toLocaleString()}${total ? ` (${Math.round(value(current.page))}%)` : ''}`
+  const readout = `${current.label} · ${pointLabel(read, current.page)}`
 
   const last = points[points.length - 1]
   const summary = `Reading progress chart: ${points.length} points from ${formatShortDate(points[0].time)} to ${formatShortDate(
     last.time,
-  )}, reaching page ${last.page}${total ? ` of ${total}` : ''}.`
+  )}, reaching ${pointLabel(read, last.page)}.`
 
   const axisText = { fill: t.muted, fontSize: 11, fontFamily: Platform.OS === 'web' ? fontFamily : undefined }
 

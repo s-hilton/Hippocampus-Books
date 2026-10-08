@@ -167,7 +167,7 @@ function toReview(row: ReviewRow): Review {
   }
 }
 
-const READ_FIELDS = 'id, book_id, status, started_at, finished_at, current_page, page_count'
+const READ_FIELDS = 'id, book_id, status, started_at, finished_at, current_page, page_count, progress_unit'
 
 /** Oldest first; a read with no start date sorts by when it finished. */
 function byStart(a: Read, b: Read): number {
@@ -234,9 +234,20 @@ export async function startReread(bookId: string): Promise<string> {
   return data as string
 }
 
-/** Set the page a read in progress is on (and the edition's page count), logging it for the chart. */
-export async function logProgress(readId: string, page: number, pageCount: number | null): Promise<Read> {
-  const { error } = await supabase.rpc('log_progress', { p_read_id: readId, p_page: page, p_page_count: pageCount })
+/**
+ * Log how far a read in progress is, for its chart: a page (with the edition's page count,
+ * if known) or, for a read without a page count, a percent.
+ */
+export async function logProgress(
+  readId: string,
+  progress: { unit: 'pages'; page: number; pageCount: number | null } | { unit: 'percent'; percent: number },
+): Promise<Read> {
+  const { error } = await supabase.rpc(
+    'log_progress',
+    progress.unit === 'pages'
+      ? { p_read_id: readId, p_page: progress.page, p_page_count: progress.pageCount, p_unit: 'pages' }
+      : { p_read_id: readId, p_page: progress.percent, p_unit: 'percent' },
+  )
   if (error) throw error
   const { data, error: readError } = await supabase.from('reads').select(READ_FIELDS).eq('id', readId).single()
   if (readError) throw readError
@@ -279,6 +290,15 @@ export async function getRead(id: string): Promise<ReadDetail | null> {
       authors: authorNames(book),
     },
   }
+}
+
+/** Correct when a read started or finished (null start = not recorded). */
+export async function updateReadDates(
+  id: string,
+  dates: { started_at: string | null; finished_at: string | null },
+): Promise<void> {
+  const { error } = await supabase.from('reads').update(dates).eq('id', id)
+  if (error) throw error
 }
 
 /** Delete a finished read and its progress log (e.g. one recorded by mistake). */

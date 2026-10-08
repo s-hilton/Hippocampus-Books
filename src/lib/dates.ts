@@ -33,3 +33,34 @@ export function daysSpanned(startIso: string, endIso: string): number {
 export function plural(n: number, word: string): string {
   return `${n.toLocaleString()} ${word}${n === 1 ? '' : 's'}`
 }
+
+const pad = (n: number) => String(n).padStart(2, '0')
+
+/** "2026-10-08" in the reader's time zone, for date fields. */
+export function toDateInput(iso: string): string {
+  const d = new Date(iso)
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+}
+
+/** "21:05" in the reader's time zone, for time fields. */
+export function toTimeInput(iso: string): string {
+  const d = new Date(iso)
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
+/**
+ * Parse a date field ("2026-10-08") and optional time field ("9:05", "21:05"; blank =
+ * noon) in the reader's time zone. Returns an ISO timestamp, or null if either is invalid.
+ */
+export function parseDateTime(date: string, time: string): string | null {
+  const dm = /^\s*(\d{4})-(\d{1,2})-(\d{1,2})\s*$/.exec(date)
+  if (!dm) return null
+  const tm = time.trim() ? /^\s*(\d{1,2}):(\d{2})\s*$/.exec(time) : ['', '12', '00']
+  if (!tm) return null
+  const [y, mo, d, h, mi] = [dm[1], dm[2], dm[3], tm[1], tm[2]].map(Number)
+  if (h > 23 || mi > 59) return null
+  const result = new Date(y, mo - 1, d, h, mi)
+  // Reject dates that roll over, like Feb 30.
+  if (result.getFullYear() !== y || result.getMonth() !== mo - 1 || result.getDate() !== d) return null
+  return result.toISOString()
+}
