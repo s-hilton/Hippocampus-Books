@@ -95,3 +95,12 @@ export interface BookPageData {
   detailsError: string | null
   entry: Pick<ShelfEntry, 'id' | 'status' | 'rating'> | null
 }
+
+/** One book in a series, from the `series-books` Edge Function. */
+export interface SeriesBook {
+  open_library_id: string
+  title: string
+  cover_url: string | null
+  first_published: string | null
+  number: string | null
+}

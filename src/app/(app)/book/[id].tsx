@@ -1,6 +1,6 @@
 import { useCallback, useState, type ReactNode } from 'react'
 import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
-import { Stack, useFocusEffect, useLocalSearchParams } from 'expo-router'
+import { router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router'
 import { addBookToPile, getBookPage, removeFromShelf, updateShelfEntry } from '../../../lib/db'
 import { STATUSES, STATUS_LABELS, type BookPageData, type CatalogBook, type Edition, type ReadingStatus } from '../../../lib/types'
 import { useTheme, type Theme } from '../../../lib/theme'
@@ -53,6 +53,7 @@ export default function BookScreen() {
   const pageCount = details?.page_count ?? local?.page_count ?? null
   const coverUrl = details?.cover_url ?? local?.cover_url ?? null
   const series = details?.series ?? null
+  const seriesAuthorKey = details?.authors[0]?.key ?? ''
   const editions = details?.editions ?? []
   const firstIsbnEdition = editions.find((e) => e.isbn_13 || e.isbn_10)
 
@@ -120,9 +121,19 @@ export default function BookScreen() {
           {subtitle && <Text style={[styles.subtitle, { color: t.muted }]}>{subtitle}</Text>}
           <Text style={[styles.authors, { color: t.text }]}>{authors.join(', ') || 'Unknown author'}</Text>
           {series && (
-            <Text style={[styles.series, { color: t.accent }]}>
-              {series.number ? `Book ${series.number} in ${series.name}` : `Part of ${series.name}`}
-            </Text>
+            <Pressable
+              role="link"
+              aria-label={`See all books in ${series.name}`}
+              disabled={!seriesAuthorKey}
+              onPress={() =>
+                router.push({ pathname: '/series', params: { name: series.name, author: seriesAuthorKey } })
+              }
+            >
+              <Text style={[styles.series, { color: t.accent }]}>
+                {series.number ? `Book ${series.number} in ${series.name}` : `Part of ${series.name}`}
+                {seriesAuthorKey ? ' ›' : ''}
+              </Text>
+            </Pressable>
           )}
           {facts.map((f) => (
             <Text key={String(f)} style={{ color: t.muted }}>

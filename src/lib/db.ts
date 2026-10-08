@@ -1,6 +1,6 @@
 // All Supabase data access lives here so screens never build queries directly.
 import { supabase } from './supabase'
-import type { BookDetails, BookPageData, CatalogBook, ManualBookInput, ReadingStatus, ShelfEntry } from './types'
+import type { BookDetails, BookPageData, CatalogBook, ManualBookInput, ReadingStatus, SeriesBook, ShelfEntry } from './types'
 
 const BOOK_WITH_AUTHORS = `
   id, title, subtitle, description, source, cover_url, published_date, page_count, isbn_13, isbn_10, open_library_id,
@@ -174,4 +174,25 @@ export async function getBookPage(routeId: string): Promise<BookPageData> {
     detailsError: details?.error ? 'Couldn’t load full details from Open Library.' : null,
     entry: (entry?.data as BookPageData['entry']) ?? null,
   }
+}
+
+// ---------------------------------------------------------------------------
+// Series page
+// ---------------------------------------------------------------------------
+
+export interface SeriesPageData {
+  books: SeriesBook[]
+  /** The user's status for books in the series that are on their pile, keyed by Open Library id. */
+  statuses: Map<string, ReadingStatus>
+}
+
+export async function getSeries(name: string, authorKey: string): Promise<SeriesPageData> {
+  const [result, shelf] = await Promise.all([
+    supabase.functions.invoke<{ books: SeriesBook[] }>('series-books', { body: { name, author_key: authorKey } }),
+    getShelf(),
+  ])
+  if (result.error) throw result.error
+  const statuses = new Map<string, ReadingStatus>()
+  for (const entry of shelf) if (entry.book.open_library_id) statuses.set(entry.book.open_library_id, entry.status)
+  return { books: result.data?.books ?? [], statuses }
 }

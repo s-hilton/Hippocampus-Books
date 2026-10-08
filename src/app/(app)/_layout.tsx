@@ -23,6 +23,7 @@ export default function AppLayout() {
     >
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="book/[id]" options={{ title: '', headerBackTitle: 'Back' }} />
+      <Stack.Screen name="series" options={{ title: 'Series', headerBackTitle: 'Back' }} />
     </Stack>
   )
 }
