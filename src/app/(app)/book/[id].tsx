@@ -1,6 +1,6 @@
 import { useCallback, useState, type ReactNode } from 'react'
 import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
-import { Stack, useFocusEffect, useLocalSearchParams } from 'expo-router'
+import { router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router'
 import { addBookToPile, getBookPage, removeFromShelf, updateShelfEntry } from '../../../lib/db'
 import { STATUSES, STATUS_LABELS, type BookPageData, type CatalogBook, type Edition, type ReadingStatus } from '../../../lib/types'
 import { useTheme, type Theme } from '../../../lib/theme'
@@ -53,8 +53,18 @@ export default function BookScreen() {
   const pageCount = details?.page_count ?? local?.page_count ?? null
   const coverUrl = details?.cover_url ?? local?.cover_url ?? null
   const series = details?.series ?? null
+  const seriesAuthorKey = details?.authors[0]?.key ?? ''
   const editions = details?.editions ?? []
   const firstIsbnEdition = editions.find((e) => e.isbn_13 || e.isbn_10)
+  // An ISBN identifies one edition: prefer the copy in our catalog, else the newest edition that has one.
+  const isbnFromLocal = Boolean(local?.isbn_13 || local?.isbn_10)
+  const isbnSource = isbnFromLocal ? local : firstIsbnEdition
+  const isbnText = [
+    isbnSource?.isbn_13 && `ISBN-13 ${isbnSource.isbn_13}`,
+    isbnSource?.isbn_10 && `ISBN-10 ${isbnSource.isbn_10}`,
+  ]
+    .filter(Boolean)
+    .join(' · ')
 
   async function add() {
     setBusy(true)
@@ -120,15 +130,31 @@ export default function BookScreen() {
           {subtitle && <Text style={[styles.subtitle, { color: t.muted }]}>{subtitle}</Text>}
           <Text style={[styles.authors, { color: t.text }]}>{authors.join(', ') || 'Unknown author'}</Text>
           {series && (
-            <Text style={[styles.series, { color: t.accent }]}>
-              {series.number ? `Book ${series.number} in ${series.name}` : `Part of ${series.name}`}
-            </Text>
+            <Pressable
+              role="link"
+              aria-label={`See all books in ${series.name}`}
+              disabled={!seriesAuthorKey}
+              onPress={() =>
+                router.push({ pathname: '/series', params: { name: series.name, author: seriesAuthorKey } })
+              }
+            >
+              <Text style={[styles.series, { color: t.accent }]}>
+                {series.number ? `Book ${series.number} in ${series.name}` : `Part of ${series.name}`}
+                {seriesAuthorKey ? ' ›' : ''}
+              </Text>
+            </Pressable>
           )}
           {facts.map((f) => (
             <Text key={String(f)} style={{ color: t.muted }}>
               {f}
             </Text>
           ))}
+          {!!isbnText && (
+            <Text selectable style={{ color: t.muted }}>
+              {isbnText}
+              {!isbnFromLocal && editions.length > 1 ? ' (newest edition)' : ''}
+            </Text>
+          )}
         </View>
       </View>
 
@@ -214,12 +240,7 @@ export default function BookScreen() {
         </Section>
       )}
 
-      {!details && local && (local.isbn_13 || local.isbn_10) && (
-        <Section title="Details" t={t}>
-          <Text style={{ color: t.muted }}>ISBN: {local.isbn_13 ?? local.isbn_10}</Text>
-          {local.source === 'user' && <Text style={{ color: t.muted }}>Added manually by a reader.</Text>}
-        </Section>
-      )}
+      {local?.source === 'user' && <Text style={{ color: t.muted, marginTop: 8 }}>Added manually by a reader.</Text>}
 
       {data.detailsError && <Text style={{ color: t.muted, marginTop: 8 }}>{data.detailsError}</Text>}
 
@@ -260,7 +281,11 @@ function EditionRow({ edition: e, t }: { edition: Edition; t: Theme }) {
         </Text>
         {!!line1 && <Text style={{ color: t.muted }}>{line1}</Text>}
         {!!line2 && <Text style={{ color: t.muted }}>{line2}</Text>}
-        {isbn && <Text style={{ color: t.muted, fontSize: 12 }}>ISBN {isbn}</Text>}
+        {isbn && (
+          <Text selectable style={{ color: t.muted, fontSize: 12 }}>
+            ISBN {isbn}
+          </Text>
+        )}
       </View>
     </View>
   )

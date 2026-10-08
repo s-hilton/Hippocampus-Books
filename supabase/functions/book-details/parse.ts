@@ -1,6 +1,10 @@
 // Pure helpers that turn Open Library's raw JSON into the app's BookDetails shape.
 // Kept free of Deno APIs so they can be unit-tested with plain Node.
 
+import { normalizeSeriesName, parseSeries, type SeriesInfo } from '../_shared/series.ts'
+
+export { parseSeries, type SeriesInfo }
+
 export interface OLText {
   type?: string
   value: string
@@ -63,11 +67,6 @@ export interface AuthorDetails {
   bio: string | null
 }
 
-export interface SeriesInfo {
-  name: string
-  number: string | null
-}
-
 export interface BookDetails {
   open_library_id: string
   title: string
@@ -109,22 +108,6 @@ export function cleanText(text: string | OLText | undefined): string | null {
   return cleaned || null
 }
 
-/**
- * Parse an edition's series string, e.g. "Dune Chronicles ; 1", "Harry Potter (1)",
- * "The Wheel of Time, Book 1", "Discworld #1", "Dune chronicles -- bk. 1".
- */
-export function parseSeries(raw: string): SeriesInfo | null {
-  const s = raw.replace(/\s+/g, ' ').replace(/[.\s]+$/, '').trim()
-  if (!s) return null
-  // A number only counts as a series position after a real separator, so "Catch-22" stays a title.
-  const m = s.match(
-    /^(.*?)(?:\s*[,;:(]\s*|\s+[–—-]*\s*|\s*#\s*)(?:(?:book|bk\.?|vol\.?|volume|no\.?|number|part|tome)\s*#?\s*)?(\d+(?:\.\d+)?)\s*\)?$/i,
-  )
-  const clean = (name: string) => name.replace(/[\s,;:(#–—-]+$/, '').trim()
-  if (m && clean(m[1])) return { name: clean(m[1]), number: m[2] }
-  return { name: clean(s), number: null }
-}
-
 /** Pick the series name most editions agree on, and the most common number for it. */
 export function pickSeries(work: OLWork, editions: OLEdition[]): SeriesInfo | null {
   const parsed = [...(work.series ?? []), ...editions.flatMap((e) => e.series ?? [])]
@@ -134,7 +117,7 @@ export function pickSeries(work: OLWork, editions: OLEdition[]): SeriesInfo | nu
 
   const byName = new Map<string, { name: string; count: number; numbers: Map<string, number> }>()
   for (const s of parsed) {
-    const k = s.name.toLowerCase()
+    const k = normalizeSeriesName(s.name)
     const entry = byName.get(k) ?? { name: s.name, count: 0, numbers: new Map() }
     entry.count++
     if (s.number) entry.numbers.set(s.number, (entry.numbers.get(s.number) ?? 0) + 1)
