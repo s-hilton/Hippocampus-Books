@@ -1,0 +1,265 @@
+name,slug,category
+Violence,violence,Violence
+Graphic violence,graphic-violence,Violence
+Gore,gore,Violence
+Blood,blood,Violence
+Torture,torture,Violence
+Murder,murder,Violence
+Mass murder,mass-murder,Violence
+Massacre,massacre,Violence
+Genocide,genocide,Violence
+War,war,Violence
+Terrorism,terrorism,Violence
+Bombing,bombing,Violence
+Mass shooting,mass-shooting,Violence
+Gun violence,gun-violence,Violence
+Knife violence,knife-violence,Violence
+Fighting,fighting,Violence
+Assault,assault,Violence
+Domestic violence,domestic-violence,Violence
+Intimate partner violence,intimate-partner-violence,Violence
+Police brutality,police-brutality,Violence
+Execution,execution,Violence
+Decapitation,decapitation,Violence
+Dismemberment,dismemberment,Violence
+Mutilation,mutilation,Violence
+Cannibalism,cannibalism,Violence
+Human trafficking,human-trafficking,Violence
+Slavery,slavery,Violence
+Kidnapping,kidnapping,Violence
+Abduction,abduction,Violence
+Hostage situation,hostage-situation,Violence
+Captivity,captivity,Violence
+Imprisonment,imprisonment,Violence
+Confinement,confinement,Violence
+Stalking,stalking,Violence
+Home invasion,home-invasion,Violence
+Vehicular violence,vehicular-violence,Violence
+Animal attack,animal-attack,Violence
+Abuse,abuse,Abuse
+Physical abuse,physical-abuse,Abuse
+Emotional abuse,emotional-abuse,Abuse
+Psychological abuse,psychological-abuse,Abuse
+Verbal abuse,verbal-abuse,Abuse
+Gaslighting,gaslighting,Abuse
+Manipulation,manipulation,Abuse
+Coercive control,coercive-control,Abuse
+Financial abuse,financial-abuse,Abuse
+Child abuse,child-abuse,Abuse
+Child neglect,child-neglect,Abuse
+Elder abuse,elder-abuse,Abuse
+Domestic abuse,domestic-abuse,Abuse
+Abusive parent,abusive-parent,Abuse
+Abusive partner,abusive-partner,Abuse
+Grooming,grooming,Abuse
+Bullying,bullying,Abuse
+Cyberbullying,cyberbullying,Abuse
+Hazing,hazing,Abuse
+Cult abuse,cult-abuse,Abuse
+Religious abuse,religious-abuse,Abuse
+Spiritual abuse,spiritual-abuse,Abuse
+Toxic relationship,toxic-relationship,Abuse
+Toxic friendship,toxic-friendship,Abuse
+Abuse survivor recovery,abuse-survivor-recovery,Abuse
+Sexual content,sexual-content,Sexual Content & Sexual Violence
+Explicit sexual content,explicit-sexual-content,Sexual Content & Sexual Violence
+Rape,rape,Sexual Content & Sexual Violence
+Sexual assault,sexual-assault,Sexual Content & Sexual Violence
+Attempted sexual assault,attempted-sexual-assault,Sexual Content & Sexual Violence
+Sexual harassment,sexual-harassment,Sexual Content & Sexual Violence
+Dubious consent,dubious-consent,Sexual Content & Sexual Violence
+Non-consent,non-consent,Sexual Content & Sexual Violence
+Consensual non-consent (CNC),consensual-non-consent-cnc,Sexual Content & Sexual Violence
+Sexual coercion,sexual-coercion,Sexual Content & Sexual Violence
+Drugging,drugging,Sexual Content & Sexual Violence
+Incest,incest,Sexual Content & Sexual Violence
+Pseudo-incest (step-relations),pseudo-incest-step-relations,Sexual Content & Sexual Violence
+Child sexual abuse,child-sexual-abuse,Sexual Content & Sexual Violence
+Pedophilia,pedophilia,Sexual Content & Sexual Violence
+Sex trafficking,sex-trafficking,Sexual Content & Sexual Violence
+Sex work,sex-work,Sexual Content & Sexual Violence
+Forced prostitution,forced-prostitution,Sexual Content & Sexual Violence
+Revenge porn,revenge-porn,Sexual Content & Sexual Violence
+Voyeurism (non-consensual),voyeurism-non-consensual,Sexual Content & Sexual Violence
+Infidelity,infidelity,Sexual Content & Sexual Violence
+Cheating,cheating,Sexual Content & Sexual Violence
+Sexual exploitation,sexual-exploitation,Sexual Content & Sexual Violence
+Sexual abuse in backstory,sexual-abuse-in-backstory,Sexual Content & Sexual Violence
+Suicide,suicide,Self-Harm & Suicide
+Suicide attempt,suicide-attempt,Self-Harm & Suicide
+Suicidal ideation,suicidal-ideation,Self-Harm & Suicide
+Assisted suicide,assisted-suicide,Self-Harm & Suicide
+Self-harm,self-harm,Self-Harm & Suicide
+Cutting,cutting,Self-Harm & Suicide
+Death by suicide in backstory,death-by-suicide-in-backstory,Self-Harm & Suicide
+Suicide of a loved one,suicide-of-a-loved-one,Self-Harm & Suicide
+Depression,depression,Mental Health
+Anxiety,anxiety,Mental Health
+Panic attacks,panic-attacks,Mental Health
+PTSD,ptsd,Mental Health
+Trauma,trauma,Mental Health
+Flashbacks,flashbacks,Mental Health
+Dissociation,dissociation,Mental Health
+Psychosis,psychosis,Mental Health
+Hallucinations,hallucinations,Mental Health
+Delusions,delusions,Mental Health
+Paranoia,paranoia,Mental Health
+Bipolar disorder,bipolar-disorder,Mental Health
+Schizophrenia,schizophrenia,Mental Health
+Obsessive-compulsive disorder,obsessive-compulsive-disorder,Mental Health
+Eating disorder,eating-disorder,Mental Health
+Anorexia,anorexia,Mental Health
+Bulimia,bulimia,Mental Health
+Binge eating,binge-eating,Mental Health
+Body dysmorphia,body-dysmorphia,Mental Health
+Fatphobia,fatphobia,Mental Health
+Body shaming,body-shaming,Mental Health
+Mental institution,mental-institution,Mental Health
+Involuntary commitment,involuntary-commitment,Mental Health
+Ableism,ableism,Mental Health
+Sanism,sanism,Mental Health
+Death,death,Death & Grief
+Death of a parent,death-of-a-parent,Death & Grief
+Death of a child,death-of-a-child,Death & Grief
+Death of a sibling,death-of-a-sibling,Death & Grief
+Death of a partner,death-of-a-partner,Death & Grief
+Death of a spouse,death-of-a-spouse,Death & Grief
+Death of a friend,death-of-a-friend,Death & Grief
+Death of a pet,death-of-a-pet,Death & Grief
+Animal death,animal-death,Death & Grief
+Animal cruelty,animal-cruelty,Death & Grief
+Child death,child-death,Death & Grief
+Infant death,infant-death,Death & Grief
+Grief,grief,Death & Grief
+Terminal illness,terminal-illness,Death & Grief
+Dying,dying,Death & Grief
+Funeral,funeral,Death & Grief
+Corpse,corpse,Death & Grief
+Body discovery,body-discovery,Death & Grief
+Murder of a loved one,murder-of-a-loved-one,Death & Grief
+Mass death,mass-death,Death & Grief
+Euthanasia,euthanasia,Death & Grief
+Medical content,medical-content,Medical & Body
+Hospitalization,hospitalization,Medical & Body
+Surgery,surgery,Medical & Body
+Medical trauma,medical-trauma,Medical & Body
+Medical procedures,medical-procedures,Medical & Body
+Cancer,cancer,Medical & Body
+Chronic illness,chronic-illness,Medical & Body
+Terminal illness diagnosis,terminal-illness-diagnosis,Medical & Body
+Dementia,dementia,Medical & Body
+Alzheimer's disease,alzheimers-disease,Medical & Body
+Stroke,stroke,Medical & Body
+Heart attack,heart-attack,Medical & Body
+Pandemic,pandemic,Medical & Body
+Epidemic,epidemic,Medical & Body
+Disease,disease,Medical & Body
+Plague,plague,Medical & Body
+Injury,injury,Medical & Body
+Severe injury,severe-injury,Medical & Body
+Burns,burns,Medical & Body
+Amputation,amputation,Medical & Body
+Disfigurement,disfigurement,Medical & Body
+Blindness,blindness,Medical & Body
+Paralysis,paralysis,Medical & Body
+Coma,coma,Medical & Body
+Vomit,vomit,Medical & Body
+Needles,needles,Medical & Body
+Body horror,body-horror,Medical & Body
+Parasites,parasites,Medical & Body
+Insects,insects,Medical & Body
+Pregnancy,pregnancy,Medical & Body
+Childbirth,childbirth,Medical & Body
+Graphic childbirth,graphic-childbirth,Medical & Body
+Miscarriage,miscarriage,Medical & Body
+Pregnancy loss,pregnancy-loss,Medical & Body
+Stillbirth,stillbirth,Medical & Body
+Abortion,abortion,Medical & Body
+Infertility,infertility,Medical & Body
+Forced pregnancy,forced-pregnancy,Medical & Body
+Medical experimentation,medical-experimentation,Medical & Body
+Human experimentation,human-experimentation,Medical & Body
+Alcohol,alcohol,Substances
+Alcoholism,alcoholism,Substances
+Alcohol abuse,alcohol-abuse,Substances
+Drunk driving,drunk-driving,Substances
+Drug use,drug-use,Substances
+Drug abuse,drug-abuse,Substances
+Drug addiction,drug-addiction,Substances
+Overdose,overdose,Substances
+Withdrawal,withdrawal,Substances
+Smoking,smoking,Substances
+Vaping,vaping,Substances
+Gambling addiction,gambling-addiction,Substances
+Addiction,addiction,Substances
+Racism,racism,Discrimination & Hate
+Racial slurs,racial-slurs,Discrimination & Hate
+Antisemitism,antisemitism,Discrimination & Hate
+Islamophobia,islamophobia,Discrimination & Hate
+Xenophobia,xenophobia,Discrimination & Hate
+Homophobia,homophobia,Discrimination & Hate
+Biphobia,biphobia,Discrimination & Hate
+Transphobia,transphobia,Discrimination & Hate
+Misgendering,misgendering,Discrimination & Hate
+Deadnaming,deadnaming,Discrimination & Hate
+Conversion therapy,conversion-therapy,Discrimination & Hate
+Sexism,sexism,Discrimination & Hate
+Misogyny,misogyny,Discrimination & Hate
+Misandry,misandry,Discrimination & Hate
+Ableism (discrimination),ableism-discrimination,Discrimination & Hate
+Classism,classism,Discrimination & Hate
+Religious persecution,religious-persecution,Discrimination & Hate
+Colonialism,colonialism,Discrimination & Hate
+Hate crime,hate-crime,Discrimination & Hate
+Slurs,slurs,Discrimination & Hate
+Bigotry,bigotry,Discrimination & Hate
+Segregation,segregation,Discrimination & Hate
+Internment,internment,Discrimination & Hate
+Holocaust,holocaust,Discrimination & Hate
+Kidnapping of a child,kidnapping-of-a-child,Other
+Missing child,missing-child,Other
+Child in danger,child-in-danger,Other
+Child endangerment,child-endangerment,Other
+Natural disaster,natural-disaster,Other
+Fire,fire,Other
+House fire,house-fire,Other
+Drowning,drowning,Other
+Car accident,car-accident,Other
+Plane crash,plane-crash,Other
+Shipwreck,shipwreck,Other
+Being buried alive,being-buried-alive,Other
+Claustrophobia,claustrophobia,Other
+Darkness,darkness,Other
+Heights,heights,Other
+Spiders,spiders,Other
+Snakes,snakes,Other
+Clowns,clowns,Other
+Dolls,dolls,Other
+Ghosts and hauntings,ghosts-and-hauntings,Other
+Demonic content,demonic-content,Other
+Occult content,occult-content,Other
+Religious content,religious-content,Other
+Blasphemy,blasphemy,Other
+Cults,cults,Other
+Brainwashing,brainwashing,Other
+Mind control,mind-control,Other
+Loss of autonomy,loss-of-autonomy,Other
+Body swapping,body-swapping,Other
+Memory loss,memory-loss,Other
+Gaslighting by narrator,gaslighting-by-narrator,Other
+Infidelity by main character,infidelity-by-main-character,Other
+Cheating by love interest,cheating-by-love-interest,Other
+Divorce,divorce,Other
+Homelessness,homelessness,Other
+Poverty,poverty,Other
+Starvation,starvation,Other
+Famine,famine,Other
+Abandonment,abandonment,Other
+Isolation,isolation,Other
+Loneliness,loneliness,Other
+Toxic workplace,toxic-workplace,Other
+Workplace harassment,workplace-harassment,Other
+Animal harm,animal-harm,Other
+Hunting,hunting,Other
+Profanity,profanity,Other
+Cliffhanger,cliffhanger,Other

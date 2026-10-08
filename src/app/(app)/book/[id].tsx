@@ -6,6 +6,7 @@ import {
   addBookToPile,
   getBookDetails,
   getBookLocal,
+  getCommunityTags,
   peekBookDetails,
   peekBookLocal,
   prefetchSeries,
@@ -24,11 +25,13 @@ import {
   type Edition,
   type ReadingStatus,
   type Review,
+  type TagCount,
 } from '../../../lib/types'
 import { useTheme, type Theme } from '../../../lib/theme'
 import BookCover from '../../../components/BookCover'
 import Chip from '../../../components/Chip'
 import ExpandableText from '../../../components/ExpandableText'
+import CommunityTags from '../../../components/CommunityTags'
 import ReviewForm from '../../../components/ReviewForm'
 import StarRating from '../../../components/StarRating'
 import { Button, ErrorText, Loading } from '../../../components/ui'
@@ -51,6 +54,15 @@ export default function BookScreen() {
   const [busy, setBusy] = useState(false)
   const [showAllEditions, setShowAllEditions] = useState(false)
   const [reviewOpen, setReviewOpen] = useState(false)
+  // Community tropes / content warnings for this book (null while loading).
+  const [community, setCommunity] = useState<{ tropes: TagCount[]; warnings: TagCount[] } | null>(null)
+
+  const loadCommunity = useCallback((bookId: string | undefined) => {
+    if (!bookId) return setCommunity({ tropes: [], warnings: [] }) // not in our catalog: nobody has tagged it
+    getCommunityTags(bookId)
+      .then(setCommunity)
+      .catch(() => setCommunity((prev) => prev ?? { tropes: [], warnings: [] }))
+  }, [])
 
   const loadDetails = useCallback((workKey: string) => {
     getBookDetails(workKey)
@@ -74,13 +86,14 @@ export default function BookScreen() {
       .then((d) => {
         setLocalData(d)
         setError(null)
+        loadCommunity(d.local?.id)
         if (!routeWorkKey) {
           if (d.local?.open_library_id) loadDetails(d.local.open_library_id)
           else setDetails(null)
         }
       })
       .catch((err) => setError(err instanceof Error ? err.message : 'Could not load this book.'))
-  }, [id, routeWorkKey, loadDetails])
+  }, [id, routeWorkKey, loadDetails, loadCommunity])
 
   useFocusEffect(load)
 
@@ -180,6 +193,7 @@ export default function BookScreen() {
   function setReview(review: Review | null) {
     if (localData) updateLocal({ ...localData, review })
     setReviewOpen(false)
+    loadCommunity(localData?.local?.id) // the counts include this review's tags
   }
 
   async function remove() {
@@ -284,6 +298,17 @@ export default function BookScreen() {
             {details === undefined ? 'Loading…' : detailsError ? 'Not available right now.' : 'No description available.'}
           </Text>
         )}
+      </Section>
+
+      <Section title="Hippocampus Community Tropes" t={t}>
+        <CommunityTags tags={community?.tropes ?? null} empty="No tropes added yet. Readers can add them in their review." />
+      </Section>
+
+      <Section title="Hippocampus Community Content Warnings" t={t}>
+        <CommunityTags
+          tags={community?.warnings ?? null}
+          empty="No content warnings added yet. Readers can add them in their review."
+        />
       </Section>
 
       {details && details.subjects.length > 0 && (
