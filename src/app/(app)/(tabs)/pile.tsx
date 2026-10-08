@@ -9,7 +9,7 @@ import { useTheme } from '../../../lib/theme'
 import BookCover from '../../../components/BookCover'
 import Chip from '../../../components/Chip'
 import ReviewForm from '../../../components/ReviewForm'
-import StarRating from '../../../components/StarRating'
+import ReviewStars from '../../../components/ReviewStars'
 import { Button, ErrorText, Loading, Screen } from '../../../components/ui'
 
 type Filter = 'all' | ReadingStatus
@@ -119,13 +119,7 @@ export default function PileScreen() {
               </View>
               {item.status === 'read' &&
                 (item.review ? (
-                  <Pressable
-                    role="button"
-                    aria-label={`Rated ${item.review.rating} out of 5. Edit your review`}
-                    onPress={() => setReviewing(item)}
-                  >
-                    <StarRating value={item.review.rating} />
-                  </Pressable>
+                  <ReviewStars rating={item.review.rating} onEdit={() => setReviewing(item)} />
                 ) : (
                   <View style={styles.reviewButton}>
                     <Button variant="secondary" title="Leave a review" onPress={() => setReviewing(item)} />
