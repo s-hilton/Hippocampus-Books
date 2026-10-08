@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { StyleSheet, Text, View } from 'react-native'
+import { StyleSheet, View } from 'react-native'
+import { Text } from './Text'
 import { addManualBook } from '../lib/db'
 import { useTheme } from '../lib/theme'
 import { Button, ErrorText, Input } from './ui'

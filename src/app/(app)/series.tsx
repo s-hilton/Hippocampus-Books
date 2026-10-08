@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react'
-import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native'
+import { FlatList, Pressable, StyleSheet, View } from 'react-native'
+import { Text } from '../../components/Text'
 import { Stack, useFocusEffect, useLocalSearchParams } from 'expo-router'
 import { getSeries, peekSeriesBooks, type SeriesPageData } from '../../lib/db'
 import { openBook, warmBook } from '../../lib/navigation'

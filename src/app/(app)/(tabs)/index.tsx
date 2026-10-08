@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native'
+import { ActivityIndicator, FlatList, Pressable, StyleSheet, View } from 'react-native'
+import { Text } from '../../../components/Text'
 import { useFocusEffect } from 'expo-router'
 import { addBookToPile, getPileKeys, isInPile, mergeSearchResults, searchCatalog, searchOpenLibrary } from '../../../lib/db'
 import { openBook, warmBook } from '../../../lib/navigation'

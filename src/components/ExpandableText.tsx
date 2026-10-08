@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { Pressable, Text, type TextStyle } from 'react-native'
+import { Pressable, type TextStyle } from 'react-native'
+import { Text } from './Text'
 import { useTheme } from '../lib/theme'
 
 /** Long text clamped to a few lines, with a "Show more" toggle when it's long enough to need one. */

@@ -1,7 +1,7 @@
-import { Text } from 'react-native'
+import { Text } from '../../../components/Text'
 import { Tabs } from 'expo-router/js-tabs'
 import { supabase } from '../../../lib/supabase'
-import { useTheme } from '../../../lib/theme'
+import { fontFamily, useTheme } from '../../../lib/theme'
 import { Button } from '../../../components/ui'
 
 export default function TabsLayout() {
@@ -11,11 +11,12 @@ export default function TabsLayout() {
     <Tabs
       screenOptions={{
         headerStyle: { backgroundColor: t.bg },
-        headerTitleStyle: { color: t.text },
+        headerTitleStyle: { color: t.accent, fontFamily, fontWeight: '700' },
         headerShadowVisible: false,
         tabBarStyle: { backgroundColor: t.card, borderTopColor: t.border },
         tabBarActiveTintColor: t.accent,
         tabBarInactiveTintColor: t.muted,
+        tabBarLabelStyle: { fontFamily },
         headerRight: () => <Button variant="link" title="Sign out" onPress={() => supabase.auth.signOut()} />,
       }}
     >

@@ -1,5 +1,7 @@
 import { useState } from 'react'
-import { StyleSheet, Text, View } from 'react-native'
+import { StyleSheet, View } from 'react-native'
+import { Text } from '../components/Text'
+import { Image } from 'expo-image'
 import { Redirect } from 'expo-router'
 import { useAuth } from '../lib/auth'
 import { supabase, supabaseConfigured } from '../lib/supabase'
@@ -34,7 +36,10 @@ export default function SignIn() {
   return (
     <Screen>
       <View style={styles.box}>
-        <Text style={[styles.title, { color: t.text }]}>Hippocampus Books</Text>
+        <Image source={require('../../assets/logo.png')} style={styles.logo} contentFit="contain" alt="" />
+        <Text style={[styles.title, { color: t.accent }]} role="heading">
+          Hippocampus Books
+        </Text>
         {!supabaseConfigured ? (
           <ErrorText>
             Supabase is not configured. Set EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY (see .env).
@@ -77,6 +82,7 @@ export default function SignIn() {
 }
 
 const styles = StyleSheet.create({
-  box: { width: '100%', maxWidth: 400, alignSelf: 'center', marginTop: 80, gap: 12 },
-  title: { fontSize: 28, fontWeight: '700', marginBottom: 12 },
+  box: { width: '100%', maxWidth: 400, alignSelf: 'center', marginTop: 56, gap: 12 },
+  logo: { width: 140, height: 154, alignSelf: 'center' },
+  title: { fontSize: 28, fontWeight: '700', marginBottom: 12, textAlign: 'center' },
 })

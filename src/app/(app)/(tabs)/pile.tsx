@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react'
-import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native'
+import { FlatList, Pressable, RefreshControl, StyleSheet, View } from 'react-native'
+import { Text } from '../../../components/Text'
 import { useFocusEffect } from 'expo-router'
 import { getShelf, removeFromShelf, updateShelfEntry } from '../../../lib/db'
 import { openBook, warmBook } from '../../../lib/navigation'
