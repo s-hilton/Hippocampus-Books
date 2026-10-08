@@ -12,14 +12,20 @@ import type { BookDetails, BookLocalData, CatalogBook, ManualBookInput, ReadingS
 async function functionError(error: unknown): Promise<Error> {
   const context = (error as { context?: unknown }).context
   if (context instanceof Response) {
+    let detail = ''
     try {
-      const body = (await context.clone().json()) as { error?: string }
+      const body = (await context.clone().json()) as { error?: string; message?: string; msg?: string }
       if (body.error) return new Error(body.error)
+      detail = body.message ?? body.msg ?? ''
     } catch {
       // not JSON; fall through
     }
+    // Not one of our functions' messages (e.g. the function isn't deployed, or the
+    // gateway rejected the request): include what Supabase said, to make it diagnosable.
+    return new Error(`Couldn’t reach the book service (${context.status}${detail ? `: ${detail}` : ''}).`)
   }
-  return new Error('Couldn’t reach the book service. Check your connection and try again.')
+  const reason = error instanceof Error && error.message ? `: ${error.message}` : ''
+  return new Error(`Couldn’t reach the book service${reason}. Check your connection and try again.`)
 }
 
 const BOOK_WITH_AUTHORS = `

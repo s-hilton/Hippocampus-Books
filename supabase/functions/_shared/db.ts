@@ -39,3 +39,24 @@ export function catalogBooks(books: object[]): void {
 export function openLibraryHeaders(): Record<string, string> {
   return olHeaders(Deno.env.get('OPEN_LIBRARY_CONTACT'))
 }
+
+/**
+ * Require a signed-in user. Returns null if the request carries a valid user token,
+ * otherwise a reason to send back with a 401.
+ *
+ * We verify here instead of with the gateway's `verify_jwt` setting: that legacy check
+ * only understands the old shared-secret tokens and rejects tokens signed with the new
+ * asymmetric signing keys that new projects use. getClaims() handles both.
+ */
+export async function authError(req: Request): Promise<string | null> {
+  const token = req.headers.get('Authorization')?.replace(/^Bearer\s+/i, '').trim()
+  if (!token) return 'Please sign in.'
+  const db = serviceClient()
+  if (!db) {
+    console.error('authError: SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY missing; cannot verify users')
+    return 'The book service is not configured.'
+  }
+  const { data, error } = await db.auth.getClaims(token)
+  if (error || !data?.claims?.sub || data.claims.role !== 'authenticated') return 'Please sign in again.'
+  return null
+}

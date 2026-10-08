@@ -39,6 +39,7 @@ A book reading tracker (think Goodreads / The StoryGraph). Expo (React Native) a
 - Never edit a migration that has been merged to `main`; add a new one.
 - Every table has RLS enabled with explicit policies.
 - Book cover = the newest edition's cover (same main language, not audio), falling back to Open Library's default (`pickCover` in `book-details/parse.ts`).
+- Function auth: `verify_jwt = false` in `config.toml` on purpose. Each function calls `authError(req)` (`_shared/db.ts`), which verifies the user's token with `getClaims()`; the gateway's legacy `verify_jwt` check rejects tokens signed with the new asymmetric signing keys.
 - Errors: Edge Functions return `{ error: "readable reason" }` (503 when Open Library is busy, 404 when not found); `functionError()` in `db.ts` surfaces it. Screens offer "Try again" rather than a dead end.
 - Search runs as you type (catalog after a 250ms pause, Open Library after 700ms and 3+ characters; the Search button skips the wait). Opening a book page preloads its series list (`prefetchSeries`).
 - Speed: screens show what's already known first (catalog rows, memory, saved data) and fill in from Open Library after; never block a whole screen on an Edge Function. Edge Functions save in the background (`inBackground`) after responding.
