@@ -1,9 +1,9 @@
 // All Supabase data access lives here so screens never build queries directly.
 import { supabase } from './supabase'
-import type { CatalogBook, ManualBookInput, ReadingStatus, ShelfEntry } from './types'
+import type { BookDetails, BookPageData, CatalogBook, ManualBookInput, ReadingStatus, ShelfEntry } from './types'
 
 const BOOK_WITH_AUTHORS = `
-  id, title, subtitle, cover_url, published_date, page_count, isbn_13, isbn_10, open_library_id,
+  id, title, subtitle, description, source, cover_url, published_date, page_count, isbn_13, isbn_10, open_library_id,
   book_authors ( position, author:authors ( name ) )
 `
 
@@ -11,6 +11,8 @@ interface BookRow {
   id: string
   title: string
   subtitle: string | null
+  description: string | null
+  source: string
   cover_url: string | null
   published_date: string | null
   page_count: number | null
@@ -27,7 +29,7 @@ function authorNames(row: Pick<BookRow, 'book_authors'>): string[] {
 }
 
 function rowToCatalogBook(row: BookRow): CatalogBook {
-  const { book_authors: _, ...rest } = row
+  const { book_authors: _, description: _d, source: _s, ...rest } = row
   return { ...rest, authors: authorNames(row) }
 }
 
@@ -49,10 +51,9 @@ export async function searchBooks(query: string): Promise<CatalogBook[]> {
   return [...localBooks, ...remoteBooks]
 }
 
-/** Find-or-create the book (de-duplicated server-side) and put it on the user's shelf. */
+/** Find-or-create the book (de-duplicated server-side, matching on id, Open Library id, then ISBN) and put it on the user's shelf. */
 export async function addBookToPile(book: CatalogBook): Promise<string> {
-  const { id: _, ...payload } = book
-  const { data, error } = await supabase.rpc('add_book_to_pile', { p_book: payload })
+  const { data, error } = await supabase.rpc('add_book_to_pile', { p_book: book })
   if (error) throw error
   return data as string
 }
@@ -96,13 +97,21 @@ export function isInPile(book: CatalogBook, keys: Set<string>): boolean {
 export async function getShelf(): Promise<ShelfEntry[]> {
   const { data, error } = await supabase
     .from('user_books')
-    .select(`id, status, rating, created_at, book:books ( id, title, cover_url, book_authors ( position, author:authors ( name ) ) )`)
+    .select(`id, status, rating, created_at, book:books ( id, open_library_id, title, cover_url, book_authors ( position, author:authors ( name ) ) )`)
     .order('created_at', { ascending: false })
   if (error) throw error
-  type Row = Omit<ShelfEntry, 'book'> & { book: Pick<BookRow, 'id' | 'title' | 'cover_url' | 'book_authors'> }
+  type Row = Omit<ShelfEntry, 'book'> & {
+    book: Pick<BookRow, 'id' | 'open_library_id' | 'title' | 'cover_url' | 'book_authors'>
+  }
   return (data as unknown as Row[]).map((row) => ({
     ...row,
-    book: { id: row.book.id, title: row.book.title, cover_url: row.book.cover_url, authors: authorNames(row.book) },
+    book: {
+      id: row.book.id,
+      open_library_id: row.book.open_library_id,
+      title: row.book.title,
+      cover_url: row.book.cover_url,
+      authors: authorNames(row.book),
+    },
   }))
 }
 
@@ -118,4 +127,51 @@ export async function updateShelfEntry(
 export async function removeFromShelf(id: string): Promise<void> {
   const { error } = await supabase.from('user_books').delete().eq('id', id)
   if (error) throw error
+}
+
+// ---------------------------------------------------------------------------
+// Book page
+// ---------------------------------------------------------------------------
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+/**
+ * The `/book/[id]` route param for a book: its Open Library work id (e.g. "OL45804W")
+ * when it has one, otherwise our own books.id.
+ */
+export function bookRouteId(book: { id?: string; open_library_id: string | null }): string {
+  return book.open_library_id?.split('/').pop() ?? book.id ?? ''
+}
+
+/** Load everything the book page shows. `routeId` is an Open Library work id or one of our book ids. */
+export async function getBookPage(routeId: string): Promise<BookPageData> {
+  const byOurId = UUID.test(routeId)
+  const { data: row, error } = await supabase
+    .from('books')
+    .select(BOOK_WITH_AUTHORS)
+    .eq(byOurId ? 'id' : 'open_library_id', byOurId ? routeId : `/works/${routeId}`)
+    .maybeSingle()
+  if (error) throw error
+  const localRow = row as unknown as BookRow | null
+  const local = localRow
+    ? { ...rowToCatalogBook(localRow), id: localRow.id, description: localRow.description, source: localRow.source }
+    : null
+
+  const olId = local?.open_library_id ?? (byOurId ? null : `/works/${routeId}`)
+  const [details, entry] = await Promise.all([
+    olId
+      ? supabase.functions.invoke<BookDetails>('book-details', { body: { open_library_id: olId } })
+      : Promise.resolve(null),
+    local
+      ? supabase.from('user_books').select('id, status, rating').eq('book_id', local.id).maybeSingle()
+      : Promise.resolve(null),
+  ])
+  if (entry?.error) throw entry.error
+
+  return {
+    local,
+    details: details?.data ?? null,
+    detailsError: details?.error ? 'Couldn’t load full details from Open Library.' : null,
+    entry: (entry?.data as BookPageData['entry']) ?? null,
+  }
 }

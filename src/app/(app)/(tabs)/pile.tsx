@@ -1,13 +1,13 @@
 import { useCallback, useState } from 'react'
-import { FlatList, RefreshControl, StyleSheet, Text, View } from 'react-native'
-import { useFocusEffect } from 'expo-router'
-import { getShelf, removeFromShelf, updateShelfEntry } from '../../lib/db'
-import { STATUSES, STATUS_LABELS, type ReadingStatus, type ShelfEntry } from '../../lib/types'
-import { useTheme } from '../../lib/theme'
-import BookCover from '../../components/BookCover'
-import Chip from '../../components/Chip'
-import StarRating from '../../components/StarRating'
-import { Button, ErrorText, Loading, Screen } from '../../components/ui'
+import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native'
+import { router, useFocusEffect } from 'expo-router'
+import { bookRouteId, getShelf, removeFromShelf, updateShelfEntry } from '../../../lib/db'
+import { STATUSES, STATUS_LABELS, type ReadingStatus, type ShelfEntry } from '../../../lib/types'
+import { useTheme } from '../../../lib/theme'
+import BookCover from '../../../components/BookCover'
+import Chip from '../../../components/Chip'
+import StarRating from '../../../components/StarRating'
+import { Button, ErrorText, Loading, Screen } from '../../../components/ui'
 
 type Filter = 'all' | ReadingStatus
 
@@ -58,6 +58,8 @@ export default function PileScreen() {
     }
   }
 
+  const openBook = (entry: ShelfEntry) => router.push(`/book/${bookRouteId(entry.book)}`)
+
   if (!entries && !error) return <Loading />
 
   const visible = (entries ?? []).filter((e) => filter === 'all' || e.status === filter)
@@ -93,14 +95,18 @@ export default function PileScreen() {
         }
         renderItem={({ item }) => (
           <View style={[styles.row, { borderBottomColor: t.border }]}>
-            <BookCover uri={item.book.cover_url} />
+            <Pressable accessibilityRole="link" accessibilityHint="Opens book details" onPress={() => openBook(item)}>
+              <BookCover uri={item.book.cover_url} />
+            </Pressable>
             <View style={styles.info}>
-              <Text style={[styles.title, { color: t.text }]} numberOfLines={2}>
-                {item.book.title}
-              </Text>
-              <Text style={{ color: t.muted }} numberOfLines={1}>
-                {item.book.authors.join(', ') || 'Unknown author'}
-              </Text>
+              <Pressable accessibilityRole="link" accessibilityHint="Opens book details" onPress={() => openBook(item)}>
+                <Text style={[styles.title, { color: t.text }]} numberOfLines={2}>
+                  {item.book.title}
+                </Text>
+                <Text style={{ color: t.muted }} numberOfLines={1}>
+                  {item.book.authors.join(', ') || 'Unknown author'}
+                </Text>
+              </Pressable>
               <View style={styles.statusRow}>
                 {STATUSES.map((s) => (
                   <Chip key={s} label={STATUS_LABELS[s]} active={item.status === s} onPress={() => change(item, { status: s })} />

@@ -5,8 +5,8 @@ export default function Chip({ label, active, onPress }: { label: string; active
   const t = useTheme()
   return (
     <Pressable
-      accessibilityRole="button"
-      accessibilityState={{ selected: active }}
+      role="button"
+      aria-selected={active}
       onPress={onPress}
       style={[
         styles.chip,

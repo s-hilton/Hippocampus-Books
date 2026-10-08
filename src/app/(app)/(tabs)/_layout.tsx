@@ -1,17 +1,11 @@
 import { Text } from 'react-native'
-import { Redirect } from 'expo-router'
 import { Tabs } from 'expo-router/js-tabs'
-import { useAuth } from '../../lib/auth'
-import { supabase } from '../../lib/supabase'
-import { useTheme } from '../../lib/theme'
-import { Button, Loading } from '../../components/ui'
+import { supabase } from '../../../lib/supabase'
+import { useTheme } from '../../../lib/theme'
+import { Button } from '../../../components/ui'
 
 export default function TabsLayout() {
   const t = useTheme()
-  const { session, loading } = useAuth()
-
-  if (loading) return <Loading />
-  if (!session) return <Redirect href="/sign-in" />
 
   return (
     <Tabs

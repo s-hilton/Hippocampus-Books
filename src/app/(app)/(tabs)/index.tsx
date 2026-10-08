@@ -1,12 +1,12 @@
 import { useCallback, useState } from 'react'
-import { FlatList, StyleSheet, Text, View } from 'react-native'
-import { useFocusEffect } from 'expo-router'
-import { addBookToPile, getPileKeys, isInPile, searchBooks } from '../../lib/db'
-import type { CatalogBook } from '../../lib/types'
-import { useTheme } from '../../lib/theme'
-import BookCover from '../../components/BookCover'
-import ManualAddForm from '../../components/ManualAddForm'
-import { Button, ErrorText, Input, Screen } from '../../components/ui'
+import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native'
+import { router, useFocusEffect } from 'expo-router'
+import { addBookToPile, bookRouteId, getPileKeys, isInPile, searchBooks } from '../../../lib/db'
+import type { CatalogBook } from '../../../lib/types'
+import { useTheme } from '../../../lib/theme'
+import BookCover from '../../../components/BookCover'
+import ManualAddForm from '../../../components/ManualAddForm'
+import { Button, ErrorText, Input, Screen } from '../../../components/ui'
 
 const resultKey = (b: CatalogBook) => b.id ?? b.open_library_id ?? b.isbn_13 ?? b.title
 
@@ -100,16 +100,23 @@ export default function SearchScreen() {
           const added = isInPile(item, pileKeys) || pileKeys.has(key)
           return (
             <View style={[styles.row, { borderBottomColor: t.border }]}>
-              <BookCover uri={item.cover_url} />
-              <View style={styles.info}>
-                <Text style={[styles.title, { color: t.text }]} numberOfLines={2}>
-                  {item.title}
-                </Text>
-                <Text style={{ color: t.muted }} numberOfLines={1}>
-                  {item.authors.join(', ') || 'Unknown author'}
-                  {item.published_date ? ` · ${item.published_date}` : ''}
-                </Text>
-              </View>
+              <Pressable
+                accessibilityRole="link"
+                accessibilityHint="Opens book details"
+                style={styles.open}
+                onPress={() => router.push(`/book/${bookRouteId(item)}`)}
+              >
+                <BookCover uri={item.cover_url} />
+                <View style={styles.info}>
+                  <Text style={[styles.title, { color: t.text }]} numberOfLines={2}>
+                    {item.title}
+                  </Text>
+                  <Text style={{ color: t.muted }} numberOfLines={1}>
+                    {item.authors.join(', ') || 'Unknown author'}
+                    {item.published_date ? ` · ${item.published_date}` : ''}
+                  </Text>
+                </View>
+              </Pressable>
               <Button
                 variant={added ? 'link' : 'secondary'}
                 title={added ? 'In pile ✓' : adding === key ? 'Adding…' : 'Add'}
@@ -129,6 +136,7 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   notice: { marginVertical: 6 },
   row: { flexDirection: 'row', gap: 12, alignItems: 'center', paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth },
+  open: { flex: 1, flexDirection: 'row', gap: 12, alignItems: 'center' },
   info: { flex: 1, gap: 2 },
   title: { fontSize: 16, fontWeight: '600' },
 })
