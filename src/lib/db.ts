@@ -5,6 +5,23 @@ import { normalizeSeriesName } from '../../supabase/functions/_shared/series'
 import { memoAsync } from './memory'
 import type { BookDetails, BookLocalData, CatalogBook, ManualBookInput, ReadingStatus, SeriesBook, ShelfEntry } from './types'
 
+/**
+ * Edge Function errors from supabase-js have a generic message ("non-2xx status code");
+ * our functions put a readable reason in the response body, so surface that instead.
+ */
+async function functionError(error: unknown): Promise<Error> {
+  const context = (error as { context?: unknown }).context
+  if (context instanceof Response) {
+    try {
+      const body = (await context.clone().json()) as { error?: string }
+      if (body.error) return new Error(body.error)
+    } catch {
+      // not JSON; fall through
+    }
+  }
+  return new Error('Couldn’t reach the book service. Check your connection and try again.')
+}
+
 const BOOK_WITH_AUTHORS = `
   id, title, subtitle, description, source, cover_url, published_date, page_count, isbn_13, isbn_10, open_library_id,
   book_authors ( position, author:authors ( name ) )
@@ -60,7 +77,7 @@ export async function searchOpenLibrary(query: string): Promise<CatalogBook[]> {
     if (isFresh(saved.fetched_at, results.length > 0 ? TTL_DAYS.search : TTL_DAYS.empty)) return results
   }
   const { data, error } = await supabase.functions.invoke<{ results: CatalogBook[] }>('search-books', { body: { query } })
-  if (error) throw error
+  if (error) throw await functionError(error)
   return data?.results ?? []
 }
 
@@ -224,7 +241,7 @@ export function getBookDetails(workKey: string): Promise<BookDetails | null> {
     })
     if (error) {
       if (saved) return saved.details as BookDetails // stale beats nothing
-      throw error
+      throw await functionError(error)
     }
     return data ?? null
   })
@@ -257,10 +274,13 @@ export interface SeriesPageData {
 const seriesCache = memoAsync<SeriesBook[]>()
 
 /** Books in a series: the saved list in series_lists if fresh, otherwise the series-books Edge Function. */
+const seriesKey = (name: string, authorKey: string) =>
+  `${normalizeSeriesName(name)}|${authorKey.match(/OL\d+A/)?.[0] ?? authorKey}`
+
 function getSeriesBooks(name: string, authorKey: string): Promise<SeriesBook[]> {
   const author = authorKey.match(/OL\d+A/)?.[0] ?? authorKey
   const nameKey = normalizeSeriesName(name)
-  return seriesCache.load(`${nameKey}|${author}`, async () => {
+  return seriesCache.load(seriesKey(name, authorKey), async () => {
     const { data: saved } = await supabase
       .from('series_lists')
       .select('books, fetched_at')
@@ -274,10 +294,18 @@ function getSeriesBooks(name: string, authorKey: string): Promise<SeriesBook[]> 
     const { data, error } = await supabase.functions.invoke<{ books: SeriesBook[] }>('series-books', {
       body: { name, author_key: authorKey },
     })
-    if (error) throw error
+    if (error) throw await functionError(error)
     return data?.books ?? []
   })
 }
+
+/** Start loading a series list in the background (e.g. when its book page opens). */
+export function prefetchSeries(name: string, authorKey: string) {
+  getSeriesBooks(name, authorKey).catch(() => {}) // the series page will retry and show any error
+}
+
+/** The series list if it's already loaded, so the series page can draw it instantly. */
+export const peekSeriesBooks = (name: string, authorKey: string) => seriesCache.peek(seriesKey(name, authorKey))
 
 export async function getSeries(name: string, authorKey: string): Promise<SeriesPageData> {
   const [books, shelf] = await Promise.all([getSeriesBooks(name, authorKey), getShelf()])

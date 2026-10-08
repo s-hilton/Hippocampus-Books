@@ -6,7 +6,8 @@
 // Response: { "name": string, "books": SeriesBook[], "fetched_at": string, "cached": boolean }
 
 import { isFresh, TTL_DAYS } from '../_shared/cache.ts'
-import { catalogBooks, inBackground, serviceClient } from '../_shared/db.ts'
+import { catalogBooks, inBackground, openLibraryHeaders, serviceClient } from '../_shared/db.ts'
+import { mapLimit, olGetJson } from '../_shared/openLibrary.ts'
 import { normalizeSeriesName } from '../_shared/series.ts'
 import { buildSeries, type CandidateWork, type SeriesBook } from './build.ts'
 
@@ -16,39 +17,16 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 }
 
-const OL = 'https://openlibrary.org'
-const headers = { 'User-Agent': 'HippocampusBooks/0.1 (book tracker)' }
-const MAX_WORKS = 40 // how many of the author's works to check
-const CONCURRENCY = 6 // be polite to Open Library
+const MAX_WORKS = 30 // how many of the author's works to check
+const EDITIONS_PER_WORK = 25
+const CONCURRENCY = 3 // stay under Open Library's rate limits
+const MAX_FAILED_SHARE = 0.2 // don't save a list if more than this share of lookups failed
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   })
-}
-
-async function getJson<T>(path: string): Promise<T | null> {
-  try {
-    const res = await fetch(`${OL}${path}`, { headers })
-    return res.ok ? ((await res.json()) as T) : null
-  } catch {
-    return null
-  }
-}
-
-/** Run `fn` over `items` with at most `limit` in flight. */
-async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
-  const out: R[] = new Array(items.length)
-  let next = 0
-  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
-    while (next < items.length) {
-      const i = next++
-      out[i] = await fn(items[i])
-    }
-  })
-  await Promise.all(workers)
-  return out
 }
 
 interface SearchDoc {
@@ -92,28 +70,37 @@ Deno.serve(async (req) => {
     }
   }
 
+  const headers = openLibraryHeaders()
   const params = new URLSearchParams({
     q: `author_key:${authorKey}`,
     limit: String(MAX_WORKS),
     fields: 'key,title,cover_i,first_publish_year,edition_count,author_name',
   })
-  const search = await getJson<{ docs: SearchDoc[] }>(`/search.json?${params}`)
-  if (!search) return json({ error: 'Open Library search failed' }, 502)
+  const search = await olGetJson<{ docs: SearchDoc[] }>(`/search.json?${params}`, { headers })
+  if (!search.ok) {
+    console.error(`series-books ${authorKey}: ${search.message}`)
+    return json({ error: 'Open Library is busy or unavailable. Please try again.' }, 503)
+  }
 
-  const candidates: CandidateWork[] = await mapLimit(search.docs, CONCURRENCY, async (doc) => {
-    const [work, editions] = await Promise.all([
-      getJson<{ series?: string[] }>(`${doc.key}.json`),
-      getJson<{ entries: { series?: string[] }[] }>(`${doc.key}/editions.json?limit=50`),
-    ])
-    return {
-      ...doc,
-      series: [...(work?.series ?? []), ...(editions?.entries ?? []).flatMap((e) => e.series ?? [])],
-    }
+  // Series strings live on editions (works almost never have them), so one request per work.
+  let failed = 0
+  const candidates: CandidateWork[] = await mapLimit(search.data.docs, CONCURRENCY, async (doc) => {
+    const editions = await olGetJson<{ entries: { series?: string[] | string }[] }>(
+      `${doc.key}/editions.json?limit=${EDITIONS_PER_WORK}`,
+      { headers },
+    )
+    if (!editions.ok && !editions.notFound) failed++
+    const series = editions.ok
+      ? editions.data.entries.flatMap((e) => (Array.isArray(e.series) ? e.series : e.series ? [e.series] : []))
+      : []
+    return { ...doc, series }
   })
 
   const books = buildSeries(name, candidates)
   const fetchedAt = new Date().toISOString()
-  if (db) {
+  const complete = failed <= candidates.length * MAX_FAILED_SHARE
+  if (!complete) console.error(`series-books ${authorKey}: ${failed} lookups failed; not saving`)
+  if (db && complete) {
     inBackground('save series list', async () => {
       const { error } = await db
         .from('series_lists')

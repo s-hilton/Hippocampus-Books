@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native'
 import { useFocusEffect } from 'expo-router'
 import { addBookToPile, getPileKeys, isInPile, mergeSearchResults, searchCatalog, searchOpenLibrary } from '../../../lib/db'
@@ -10,6 +10,14 @@ import ManualAddForm from '../../../components/ManualAddForm'
 import { Button, ErrorText, Input, Screen } from '../../../components/ui'
 
 const resultKey = (b: CatalogBook) => b.id ?? b.open_library_id ?? b.isbn_13 ?? b.title
+
+// Search as you type: wait for a short pause so we don't search on every keystroke.
+// Our own catalog is cheap, so it goes first; Open Library waits a little longer (and
+// needs 3+ characters) to stay well inside its rate limits. Pressing Search skips the wait.
+const CATALOG_DELAY_MS = 250
+const OPEN_LIBRARY_DELAY_MS = 700
+const MIN_CHARS = 2
+const MIN_CHARS_OPEN_LIBRARY_AUTO = 3
 
 export default function SearchScreen() {
   const t = useTheme()
@@ -28,47 +36,87 @@ export default function SearchScreen() {
   }, [])
   useFocusEffect(refreshPileKeys)
 
-  const searchId = useRef(0)
   const [searchingRemote, setSearchingRemote] = useState(false)
+  // The current search. Late responses from older searches are ignored by comparing ids.
+  const current = useRef({ id: 0, q: '', local: [] as CatalogBook[], remote: null as CatalogBook[] | null })
 
-  // Show our own catalog's matches right away, then add Open Library's as they arrive.
-  async function runSearch() {
-    const q = query.trim()
-    if (q.length < 2) return
-    const myId = ++searchId.current
-    const isCurrent = () => myId === searchId.current
-    setSearching(true)
-    setSearchingRemote(true)
+  function startSearch(q: string): number {
+    current.current = { id: current.current.id + 1, q, local: [], remote: null }
     setError(null)
     setNotice(null)
+    return current.current.id
+  }
 
-    let local: CatalogBook[] = []
-    let remote: CatalogBook[] | null = null
-    const localDone = searchCatalog(q)
+  function searchOurCatalog(id: number) {
+    const s = current.current
+    if (s.id !== id) return
+    setSearching(true)
+    searchCatalog(s.q)
       .then((r) => {
-        local = r
-        if (isCurrent()) {
-          setResults(mergeSearchResults(local, remote ?? []))
-          setSearched(true)
-        }
+        if (current.current.id !== id) return
+        s.local = r
+        setResults(mergeSearchResults(s.local, s.remote ?? []))
+        setSearched(true)
       })
       .catch(() => {}) // Open Library results can still arrive
-    const remoteDone = searchOpenLibrary(q)
+      .finally(() => current.current.id === id && setSearching(false))
+  }
+
+  function searchOpenLibraryFor(id: number) {
+    const s = current.current
+    if (s.id !== id) return
+    setSearchingRemote(true)
+    searchOpenLibrary(s.q)
       .then((r) => {
-        remote = r
-        if (isCurrent()) {
-          setResults(mergeSearchResults(local, remote))
-          setSearched(true)
-        }
+        if (current.current.id !== id) return
+        s.remote = r
+        setResults(mergeSearchResults(s.local, r))
+        setSearched(true)
       })
       .catch((err) => {
-        if (isCurrent()) setError(err instanceof Error ? err.message : 'Search failed.')
+        if (current.current.id === id) setError(err instanceof Error ? err.message : 'Search failed.')
       })
-      .finally(() => isCurrent() && setSearchingRemote(false))
+      .finally(() => current.current.id === id && setSearchingRemote(false))
+  }
 
-    await localDone
-    if (isCurrent()) setSearching(false)
-    await remoteDone
+  // Typing: search after a short pause. Earlier results stay on screen until new ones arrive.
+  const timers = useRef<ReturnType<typeof setTimeout>[]>([])
+  const clearTimers = () => {
+    timers.current.forEach(clearTimeout)
+    timers.current = []
+  }
+  useEffect(() => clearTimers, []) // stop pending searches when leaving the screen
+
+  function onChangeQuery(text: string) {
+    setQuery(text)
+    clearTimers()
+    const q = text.trim()
+    if (q.length < MIN_CHARS) {
+      startSearch('') // cancels anything in flight
+      setSearching(false)
+      setSearchingRemote(false)
+      if (q.length === 0) {
+        setResults([])
+        setSearched(false)
+      }
+      return
+    }
+    if (q === current.current.q) return // only whitespace changed
+    const id = startSearch(q)
+    timers.current.push(setTimeout(() => searchOurCatalog(id), CATALOG_DELAY_MS))
+    if (q.length >= MIN_CHARS_OPEN_LIBRARY_AUTO) {
+      timers.current.push(setTimeout(() => searchOpenLibraryFor(id), OPEN_LIBRARY_DELAY_MS))
+    }
+  }
+
+  // Pressing Search (or Enter): search immediately, skipping the pause.
+  function runSearch() {
+    const q = query.trim()
+    if (q.length < MIN_CHARS) return
+    clearTimers()
+    const id = startSearch(q)
+    searchOurCatalog(id)
+    searchOpenLibraryFor(id)
   }
 
   async function add(book: CatalogBook) {
@@ -92,7 +140,7 @@ export default function SearchScreen() {
           style={styles.flex}
           placeholder="Search by title, author, or ISBN"
           value={query}
-          onChangeText={setQuery}
+          onChangeText={onChangeQuery}
           onSubmitEditing={runSearch}
           returnKeyType="search"
           autoCorrect={false}

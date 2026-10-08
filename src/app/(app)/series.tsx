@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react'
 import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native'
 import { Stack, useFocusEffect, useLocalSearchParams } from 'expo-router'
-import { getSeries, type SeriesPageData } from '../../lib/db'
+import { getSeries, peekSeriesBooks, type SeriesPageData } from '../../lib/db'
 import { openBook, warmBook } from '../../lib/navigation'
 import { STATUS_LABELS } from '../../lib/types'
 import { useTheme } from '../../lib/theme'
@@ -11,7 +11,12 @@ import { ErrorText, Loading } from '../../components/ui'
 export default function SeriesScreen() {
   const t = useTheme()
   const { name, author } = useLocalSearchParams<{ name: string; author: string }>()
-  const [data, setData] = useState<SeriesPageData | null>(null)
+  // If the book page already loaded this series in the background, draw it right away;
+  // pile statuses fill in a moment later.
+  const [data, setData] = useState<SeriesPageData | null>(() => {
+    const books = peekSeriesBooks(name, author)
+    return books ? { books, statuses: new Map() } : null
+  })
   const [error, setError] = useState<string | null>(null)
 
   // Reload on focus so pile statuses stay current after visiting a book.
