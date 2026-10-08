@@ -1,7 +1,8 @@
-import { useCallback, useState } from 'react'
-import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native'
-import { router, useFocusEffect } from 'expo-router'
-import { addBookToPile, bookRouteId, getPileKeys, isInPile, searchBooks } from '../../../lib/db'
+import { useCallback, useRef, useState } from 'react'
+import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native'
+import { useFocusEffect } from 'expo-router'
+import { addBookToPile, getPileKeys, isInPile, mergeSearchResults, searchCatalog, searchOpenLibrary } from '../../../lib/db'
+import { openBook, warmBook } from '../../../lib/navigation'
 import type { CatalogBook } from '../../../lib/types'
 import { useTheme } from '../../../lib/theme'
 import BookCover from '../../../components/BookCover'
@@ -27,20 +28,47 @@ export default function SearchScreen() {
   }, [])
   useFocusEffect(refreshPileKeys)
 
+  const searchId = useRef(0)
+  const [searchingRemote, setSearchingRemote] = useState(false)
+
+  // Show our own catalog's matches right away, then add Open Library's as they arrive.
   async function runSearch() {
     const q = query.trim()
     if (q.length < 2) return
+    const myId = ++searchId.current
+    const isCurrent = () => myId === searchId.current
     setSearching(true)
+    setSearchingRemote(true)
     setError(null)
     setNotice(null)
-    try {
-      setResults(await searchBooks(q))
-      setSearched(true)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Search failed.')
-    } finally {
-      setSearching(false)
-    }
+
+    let local: CatalogBook[] = []
+    let remote: CatalogBook[] | null = null
+    const localDone = searchCatalog(q)
+      .then((r) => {
+        local = r
+        if (isCurrent()) {
+          setResults(mergeSearchResults(local, remote ?? []))
+          setSearched(true)
+        }
+      })
+      .catch(() => {}) // Open Library results can still arrive
+    const remoteDone = searchOpenLibrary(q)
+      .then((r) => {
+        remote = r
+        if (isCurrent()) {
+          setResults(mergeSearchResults(local, remote))
+          setSearched(true)
+        }
+      })
+      .catch((err) => {
+        if (isCurrent()) setError(err instanceof Error ? err.message : 'Search failed.')
+      })
+      .finally(() => isCurrent() && setSearchingRemote(false))
+
+    await localDone
+    if (isCurrent()) setSearching(false)
+    await remoteDone
   }
 
   async function add(book: CatalogBook) {
@@ -69,7 +97,7 @@ export default function SearchScreen() {
           returnKeyType="search"
           autoCorrect={false}
         />
-        <Button title={searching ? '…' : 'Search'} onPress={runSearch} disabled={searching} />
+        <Button title={searching || (searchingRemote && results.length === 0) ? '…' : 'Search'} onPress={runSearch} />
       </View>
 
       {error && <ErrorText>{error}</ErrorText>}
@@ -93,7 +121,17 @@ export default function SearchScreen() {
         keyExtractor={resultKey}
         keyboardShouldPersistTaps="handled"
         ListEmptyComponent={
-          searched && !searching ? <Text style={{ color: t.muted, marginTop: 16 }}>No results.</Text> : null
+          searched && !searching && !searchingRemote ? (
+            <Text style={{ color: t.muted, marginTop: 16 }}>No results.</Text>
+          ) : null
+        }
+        ListFooterComponent={
+          searchingRemote && results.length > 0 ? (
+            <View style={styles.more}>
+              <ActivityIndicator color={t.accent} size="small" />
+              <Text style={{ color: t.muted }}>Finding more books…</Text>
+            </View>
+          ) : null
         }
         renderItem={({ item }) => {
           const key = resultKey(item)
@@ -101,10 +139,11 @@ export default function SearchScreen() {
           return (
             <View style={[styles.row, { borderBottomColor: t.border }]}>
               <Pressable
-                accessibilityRole="link"
-                accessibilityHint="Opens book details"
+                role="link"
+                aria-label={`${item.title}, open details`}
                 style={styles.open}
-                onPress={() => router.push(`/book/${bookRouteId(item)}`)}
+                onPressIn={() => warmBook(item)}
+                onPress={() => openBook(item)}
               >
                 <BookCover uri={item.cover_url} />
                 <View style={styles.info}>
@@ -135,6 +174,7 @@ const styles = StyleSheet.create({
   searchRow: { flexDirection: 'row', gap: 8, marginBottom: 4 },
   flex: { flex: 1 },
   notice: { marginVertical: 6 },
+  more: { flexDirection: 'row', gap: 8, alignItems: 'center', justifyContent: 'center', paddingVertical: 16 },
   row: { flexDirection: 'row', gap: 12, alignItems: 'center', paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth },
   open: { flex: 1, flexDirection: 'row', gap: 12, alignItems: 'center' },
   info: { flex: 1, gap: 2 },

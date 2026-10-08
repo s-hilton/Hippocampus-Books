@@ -1,7 +1,8 @@
 import { useCallback, useState } from 'react'
 import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native'
-import { router, useFocusEffect } from 'expo-router'
-import { bookRouteId, getShelf, removeFromShelf, updateShelfEntry } from '../../../lib/db'
+import { useFocusEffect } from 'expo-router'
+import { getShelf, removeFromShelf, updateShelfEntry } from '../../../lib/db'
+import { openBook, warmBook } from '../../../lib/navigation'
 import { STATUSES, STATUS_LABELS, type ReadingStatus, type ShelfEntry } from '../../../lib/types'
 import { useTheme } from '../../../lib/theme'
 import BookCover from '../../../components/BookCover'
@@ -58,8 +59,6 @@ export default function PileScreen() {
     }
   }
 
-  const openBook = (entry: ShelfEntry) => router.push(`/book/${bookRouteId(entry.book)}`)
-
   if (!entries && !error) return <Loading />
 
   const visible = (entries ?? []).filter((e) => filter === 'all' || e.status === filter)
@@ -95,11 +94,11 @@ export default function PileScreen() {
         }
         renderItem={({ item }) => (
           <View style={[styles.row, { borderBottomColor: t.border }]}>
-            <Pressable accessibilityRole="link" accessibilityHint="Opens book details" onPress={() => openBook(item)}>
+            <Pressable aria-hidden onPressIn={() => warmBook(item.book)} onPress={() => openBook(item.book)}>
               <BookCover uri={item.book.cover_url} />
             </Pressable>
             <View style={styles.info}>
-              <Pressable accessibilityRole="link" accessibilityHint="Opens book details" onPress={() => openBook(item)}>
+              <Pressable role="link" onPressIn={() => warmBook(item.book)} onPress={() => openBook(item.book)}>
                 <Text style={[styles.title, { color: t.text }]} numberOfLines={2}>
                   {item.book.title}
                 </Text>

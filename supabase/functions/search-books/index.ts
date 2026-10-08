@@ -2,8 +2,14 @@
 // Keeping this server-side means we can add Google Books later (which needs an API key)
 // without shipping the key in the app, and without changing the app's code.
 //
+// Every result is also added to our books catalog, and the result list is saved in
+// search_cache so repeat searches skip Open Library (the app reads that table directly).
+//
 // Request:  POST { "query": "dune" }
 // Response: { "results": CatalogBook[] }
+
+import { normalizeQuery } from '../_shared/cache.ts'
+import { catalogBooks, inBackground, serviceClient } from '../_shared/db.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -79,5 +85,18 @@ Deno.serve(async (req) => {
   if (!res.ok) return json({ error: `Open Library search failed (${res.status})` }, 502)
 
   const data = (await res.json()) as { docs: OpenLibraryDoc[] }
-  return json({ results: data.docs.map(normalize) })
+  const results = data.docs.map(normalize)
+
+  const db = serviceClient()
+  if (db) {
+    inBackground('save search', async () => {
+      const { error } = await db
+        .from('search_cache')
+        .upsert({ query_key: normalizeQuery(query), results, fetched_at: new Date().toISOString() })
+      if (error) throw error
+    })
+  }
+  catalogBooks(results)
+
+  return json({ results })
 })

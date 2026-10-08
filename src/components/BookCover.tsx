@@ -1,4 +1,5 @@
-import { Image, StyleSheet, Text, View } from 'react-native'
+import { Image } from 'expo-image'
+import { StyleSheet, Text, View } from 'react-native'
 import { useTheme } from '../lib/theme'
 
 const SIZES = {
@@ -6,6 +7,7 @@ const SIZES = {
   large: { width: 120, height: 180 },
 }
 
+/** Book cover, cached in memory and on disk so revisited screens show it immediately. */
 export default function BookCover({ uri, size = 'small' }: { uri: string | null; size?: keyof typeof SIZES }) {
   const t = useTheme()
   const dims = SIZES[size]
@@ -16,7 +18,17 @@ export default function BookCover({ uri, size = 'small' }: { uri: string | null;
       </View>
     )
   }
-  return <Image source={{ uri }} style={[styles.cover, dims]} resizeMode="cover" />
+  return (
+    <Image
+      source={{ uri }}
+      style={[styles.cover, dims, { backgroundColor: t.border }]}
+      contentFit="cover"
+      cachePolicy="memory-disk"
+      recyclingKey={uri}
+      transition={120}
+      accessible={false}
+    />
+  )
 }
 
 const styles = StyleSheet.create({

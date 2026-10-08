@@ -1,8 +1,27 @@
 import { useCallback, useState, type ReactNode } from 'react'
 import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router'
-import { addBookToPile, getBookPage, removeFromShelf, updateShelfEntry } from '../../../lib/db'
-import { STATUSES, STATUS_LABELS, type BookPageData, type CatalogBook, type Edition, type ReadingStatus } from '../../../lib/types'
+import {
+  addBookToPile,
+  getBookDetails,
+  getBookLocal,
+  peekBookDetails,
+  peekBookLocal,
+  removeFromShelf,
+  setBookLocal,
+  updateShelfEntry,
+  workKeyFromRouteId,
+} from '../../../lib/db'
+import { getPreview } from '../../../lib/memory'
+import {
+  STATUSES,
+  STATUS_LABELS,
+  type BookDetails,
+  type BookLocalData,
+  type CatalogBook,
+  type Edition,
+  type ReadingStatus,
+} from '../../../lib/types'
 import { useTheme, type Theme } from '../../../lib/theme'
 import BookCover from '../../../components/BookCover'
 import Chip from '../../../components/Chip'
@@ -15,43 +34,78 @@ const EDITIONS_PREVIEW = 5
 export default function BookScreen() {
   const t = useTheme()
   const { id } = useLocalSearchParams<{ id: string }>()
-  const [data, setData] = useState<BookPageData | null>(null)
+  const routeWorkKey = workKeyFromRouteId(id)
+  // Draw immediately from whatever we already know (list row, earlier visit), then fill in.
+  const preview = getPreview(id)
+  const [localData, setLocalData] = useState<BookLocalData | undefined>(() => peekBookLocal(id))
+  const [details, setDetails] = useState<BookDetails | null | undefined>(() => {
+    const key = routeWorkKey ?? peekBookLocal(id)?.local?.open_library_id
+    return key ? peekBookDetails(key) : undefined
+  }) // undefined = still loading, null = none available
+  const [detailsError, setDetailsError] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [showAllEditions, setShowAllEditions] = useState(false)
 
-  const load = useCallback(async () => {
-    try {
-      setData(await getBookPage(id))
-      setError(null)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not load this book.')
+  const loadDetails = useCallback((workKey: string) => {
+    getBookDetails(workKey)
+      .then((d) => {
+        setDetails(d)
+        setDetailsError(null)
+      })
+      .catch(() => {
+        setDetails((prev) => prev ?? null)
+        setDetailsError('Couldn’t load full details from Open Library.')
+      })
+  }, [])
+
+  const load = useCallback(() => {
+    // Open Library ids can be fetched right away, in parallel with our own database.
+    if (routeWorkKey) loadDetails(routeWorkKey)
+    getBookLocal(id, { refresh: true })
+      .then((d) => {
+        setLocalData(d)
+        setError(null)
+        if (!routeWorkKey) {
+          if (d.local?.open_library_id) loadDetails(d.local.open_library_id)
+          else setDetails(null)
+        }
+      })
+      .catch((err) => setError(err instanceof Error ? err.message : 'Could not load this book.'))
+  }, [id, routeWorkKey, loadDetails])
+
+  useFocusEffect(load)
+
+  const local = localData?.local ?? null
+  const entry = localData?.entry ?? null
+
+  if (!details && !local && !preview) {
+    if (error) {
+      return (
+        <View style={[styles.page, { backgroundColor: t.bg }]}>
+          <ErrorText>{error}</ErrorText>
+        </View>
+      )
     }
-  }, [id])
-
-  useFocusEffect(
-    useCallback(() => {
-      load()
-    }, [load]),
-  )
-
-  if (!data && !error) return <Loading />
-  if (!data || (!data.local && !data.details)) {
+    if (localData === undefined || details === undefined) return <Loading />
     return (
       <View style={[styles.page, { backgroundColor: t.bg }]}>
-        <ErrorText>{error ?? data?.detailsError ?? 'Book not found.'}</ErrorText>
+        <ErrorText>{detailsError ?? 'Book not found.'}</ErrorText>
       </View>
     )
   }
 
-  const { local, details, entry } = data
-  const title = details?.title ?? local!.title
+  const title = details?.title ?? local?.title ?? preview?.title ?? ''
   const subtitle = details?.subtitle ?? local?.subtitle ?? null
-  const authors = details?.authors.length ? details.authors.map((a) => a.name) : (local?.authors ?? [])
+  const authors = details?.authors.length
+    ? details.authors.map((a) => a.name)
+    : local?.authors.length
+      ? local.authors
+      : (preview?.authors ?? [])
   const description = details?.description ?? local?.description ?? null
   const firstPublished = details?.first_published ?? local?.published_date ?? null
   const pageCount = details?.page_count ?? local?.page_count ?? null
-  const coverUrl = details?.cover_url ?? local?.cover_url ?? null
+  const coverUrl = details?.cover_url ?? local?.cover_url ?? preview?.cover_url ?? null
   const series = details?.series ?? null
   const seriesAuthorKey = details?.authors[0]?.key ?? ''
   const editions = details?.editions ?? []
@@ -66,10 +120,15 @@ export default function BookScreen() {
     .filter(Boolean)
     .join(' · ')
 
+  function updateLocal(next: BookLocalData) {
+    setLocalData(next)
+    setBookLocal(id, next) // keep the in-memory copy right for the next visit
+  }
+
   async function add() {
     setBusy(true)
     const book: CatalogBook = local ?? {
-      open_library_id: details!.open_library_id,
+      open_library_id: details?.open_library_id ?? routeWorkKey ?? preview?.open_library_id ?? null,
       title,
       subtitle,
       authors,
@@ -81,7 +140,7 @@ export default function BookScreen() {
     }
     try {
       await addBookToPile(book)
-      await load()
+      updateLocal(await getBookLocal(id, { refresh: true }))
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not add book.')
     } finally {
@@ -90,25 +149,27 @@ export default function BookScreen() {
   }
 
   async function change(changes: { status?: ReadingStatus; rating?: number | null }) {
-    if (!entry || !data) return
+    if (!entry || !localData) return
     const applied = { ...changes }
     if (changes.status && changes.status !== 'read') applied.rating = null // mirrors the database trigger
-    setData({ ...data, entry: { ...entry, ...applied } })
+    const previous = localData
+    updateLocal({ ...localData, entry: { ...entry, ...applied } })
     try {
       await updateShelfEntry(entry.id, changes)
     } catch (err) {
-      setData(data)
+      updateLocal(previous)
       setError(err instanceof Error ? err.message : 'Could not save change.')
     }
   }
 
   async function remove() {
-    if (!entry || !data) return
-    setData({ ...data, entry: null })
+    if (!entry || !localData) return
+    const previous = localData
+    updateLocal({ ...localData, entry: null })
     try {
       await removeFromShelf(entry.id)
     } catch (err) {
-      setData(data)
+      updateLocal(previous)
       setError(err instanceof Error ? err.message : 'Could not remove book.')
     }
   }
@@ -173,6 +234,8 @@ export default function BookScreen() {
               <Button variant="link" title="Remove from pile" onPress={remove} />
             </View>
           </>
+        ) : localData === undefined ? (
+          <Text style={{ color: t.muted }}>Loading…</Text>
         ) : (
           <View style={styles.left}>
             <Button title={busy ? 'Adding…' : 'Add to pile'} onPress={add} disabled={busy} />
@@ -184,7 +247,7 @@ export default function BookScreen() {
         {description ? (
           <ExpandableText text={description} />
         ) : (
-          <Text style={{ color: t.muted }}>No description available.</Text>
+          <Text style={{ color: t.muted }}>{details === undefined ? 'Loading…' : 'No description available.'}</Text>
         )}
       </Section>
 
@@ -242,7 +305,7 @@ export default function BookScreen() {
 
       {local?.source === 'user' && <Text style={{ color: t.muted, marginTop: 8 }}>Added manually by a reader.</Text>}
 
-      {data.detailsError && <Text style={{ color: t.muted, marginTop: 8 }}>{data.detailsError}</Text>}
+      {detailsError && <Text style={{ color: t.muted, marginTop: 8 }}>{detailsError}</Text>}
 
       {details && (
         <Pressable

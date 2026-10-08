@@ -1,7 +1,8 @@
 import { useCallback, useState } from 'react'
 import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native'
-import { router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router'
-import { bookRouteId, getSeries, type SeriesPageData } from '../../lib/db'
+import { Stack, useFocusEffect, useLocalSearchParams } from 'expo-router'
+import { getSeries, type SeriesPageData } from '../../lib/db'
+import { openBook, warmBook } from '../../lib/navigation'
 import { STATUS_LABELS } from '../../lib/types'
 import { useTheme } from '../../lib/theme'
 import BookCover from '../../components/BookCover'
@@ -59,7 +60,8 @@ export default function SeriesScreen() {
               <Pressable
                 role="link"
                 aria-label={`${item.title}${item.number ? `, book ${item.number}` : ''}`}
-                onPress={() => router.push(`/book/${bookRouteId({ open_library_id: item.open_library_id })}`)}
+                onPressIn={() => warmBook(item)}
+                onPress={() => openBook({ ...item, authors: [] })}
                 style={[styles.row, { borderBottomColor: t.border }]}
               >
                 <Text style={[styles.number, { color: t.accent }]}>{item.number ? `#${item.number}` : '–'}</Text>
