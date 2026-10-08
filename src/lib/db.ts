@@ -8,6 +8,9 @@ import type {
   BookLocalData,
   CatalogBook,
   ManualBookInput,
+  ProgressPoint,
+  Read,
+  ReadDetail,
   ReadingStatus,
   Review,
   SeriesBook,
@@ -164,23 +167,40 @@ function toReview(row: ReviewRow): Review {
   }
 }
 
+const READ_FIELDS = 'id, book_id, status, started_at, finished_at, current_page, page_count, progress_unit'
+
+/** Oldest first; a read with no start date sorts by when it finished. */
+function byStart(a: Read, b: Read): number {
+  return (a.started_at ?? a.finished_at ?? '').localeCompare(b.started_at ?? b.finished_at ?? '')
+}
+
 export async function getShelf(): Promise<ShelfEntry[]> {
-  const [shelf, reviews] = await Promise.all([
+  const [shelf, reviews, reads] = await Promise.all([
     supabase
       .from('user_books')
       .select(`id, status, created_at, book:books ( id, open_library_id, title, cover_url, book_authors ( position, author:authors ( name ) ) )`)
       .order('created_at', { ascending: false }),
     supabase.from('reviews').select(REVIEW_FIELDS), // RLS: only the user's own
+    supabase.from('reads').select(READ_FIELDS), // RLS: only the user's own
   ])
   if (shelf.error) throw shelf.error
   if (reviews.error) throw reviews.error
+  if (reads.error) throw reads.error
   const reviewByBook = new Map((reviews.data as unknown as ReviewRow[]).map((r) => [r.book_id, toReview(r)]))
-  type Row = Omit<ShelfEntry, 'book' | 'review'> & {
+  const openByBook = new Map<string, Read>()
+  const finishedByBook = new Map<string, number>()
+  for (const read of reads.data as Read[]) {
+    if (read.status === 'reading') openByBook.set(read.book_id, read)
+    if (read.status === 'read') finishedByBook.set(read.book_id, (finishedByBook.get(read.book_id) ?? 0) + 1)
+  }
+  type Row = Omit<ShelfEntry, 'book' | 'review' | 'currentRead' | 'timesRead'> & {
     book: Pick<BookRow, 'id' | 'open_library_id' | 'title' | 'cover_url' | 'book_authors'>
   }
   return (shelf.data as unknown as Row[]).map((row) => ({
     ...row,
     review: reviewByBook.get(row.book.id) ?? null,
+    currentRead: openByBook.get(row.book.id) ?? null,
+    timesRead: finishedByBook.get(row.book.id) ?? 0,
     book: {
       id: row.book.id,
       open_library_id: row.book.open_library_id,
@@ -191,8 +211,99 @@ export async function getShelf(): Promise<ShelfEntry[]> {
   }))
 }
 
+/** Change a book's shelf status. The database starts, closes or reopens its read to match. */
 export async function updateShelfEntry(id: string, changes: { status: ReadingStatus }): Promise<void> {
   const { error } = await supabase.from('user_books').update(changes).eq('id', id)
+  if (error) throw error
+}
+
+// ---------------------------------------------------------------------------
+// Reads and reading progress
+// ---------------------------------------------------------------------------
+
+/** Mark a book on the pile Read (from a screen that knows the book, not the shelf entry). */
+export async function markBookRead(bookId: string): Promise<void> {
+  const { error } = await supabase.from('user_books').update({ status: 'read' }).eq('book_id', bookId)
+  if (error) throw error
+}
+
+/** Start another read of a book on the pile (a reread); sets its status to Reading. */
+export async function startReread(bookId: string): Promise<string> {
+  const { data, error } = await supabase.rpc('start_reread', { p_book_id: bookId })
+  if (error) throw error
+  return data as string
+}
+
+/**
+ * Log how far a read in progress is, for its chart: a page (with the edition's page count,
+ * if known) or, for a read without a page count, a percent.
+ */
+export async function logProgress(
+  readId: string,
+  progress: { unit: 'pages'; page: number; pageCount: number | null } | { unit: 'percent'; percent: number },
+): Promise<Read> {
+  const { error } = await supabase.rpc(
+    'log_progress',
+    progress.unit === 'pages'
+      ? { p_read_id: readId, p_page: progress.page, p_page_count: progress.pageCount, p_unit: 'pages' }
+      : { p_read_id: readId, p_page: progress.percent, p_unit: 'percent' },
+  )
+  if (error) throw error
+  const { data, error: readError } = await supabase.from('reads').select(READ_FIELDS).eq('id', readId).single()
+  if (readError) throw readError
+  return data as Read
+}
+
+/** All reads of one book, oldest first. */
+async function getReadsForBook(bookId: string): Promise<Read[]> {
+  const { data, error } = await supabase.from('reads').select(READ_FIELDS).eq('book_id', bookId)
+  if (error) throw error
+  return (data as Read[]).sort(byStart)
+}
+
+/** One read with its progress log and book, for the read page. */
+export async function getRead(id: string): Promise<ReadDetail | null> {
+  const { data, error } = await supabase
+    .from('reads')
+    .select(`${READ_FIELDS}, book:books ( id, open_library_id, title, cover_url, book_authors ( position, author:authors ( name ) ) )`)
+    .eq('id', id)
+    .maybeSingle()
+  if (error) throw error
+  if (!data) return null
+  const row = data as unknown as Read & { book: Pick<BookRow, 'id' | 'open_library_id' | 'title' | 'cover_url' | 'book_authors'> }
+  const [progress, siblings] = await Promise.all([
+    supabase.from('reading_progress').select('id, page, logged_at').eq('read_id', id).order('logged_at'),
+    getReadsForBook(row.book_id),
+  ])
+  if (progress.error) throw progress.error
+  const { book, ...read } = row
+  return {
+    ...read,
+    progress: progress.data as ProgressPoint[],
+    number: siblings.findIndex((r) => r.id === id) + 1,
+    total: siblings.length,
+    book: {
+      id: book.id,
+      open_library_id: book.open_library_id,
+      title: book.title,
+      cover_url: book.cover_url,
+      authors: authorNames(book),
+    },
+  }
+}
+
+/** Correct when a read started or finished (null start = not recorded). */
+export async function updateReadDates(
+  id: string,
+  dates: { started_at: string | null; finished_at: string | null },
+): Promise<void> {
+  const { error } = await supabase.from('reads').update(dates).eq('id', id)
+  if (error) throw error
+}
+
+/** Delete a finished read and its progress log (e.g. one recorded by mistake). */
+export async function deleteRead(id: string): Promise<void> {
+  const { error } = await supabase.from('reads').delete().eq('id', id).neq('status', 'reading')
   if (error) throw error
 }
 
@@ -272,10 +383,11 @@ export function getBookLocal(routeId: string, opts?: { refresh?: boolean }): Pro
         .maybeSingle()
       if (error) throw error
       const r = row as unknown as BookRow | null
-      if (!r) return { local: null, entry: null, review: null }
-      const [entry, review] = await Promise.all([
+      if (!r) return { local: null, entry: null, review: null, reads: [] }
+      const [entry, review, reads] = await Promise.all([
         supabase.from('user_books').select('id, status').eq('book_id', r.id).maybeSingle(),
         supabase.from('reviews').select(REVIEW_FIELDS).eq('book_id', r.id).maybeSingle(),
+        getReadsForBook(r.id),
       ])
       if (entry.error) throw entry.error
       if (review.error) throw review.error
@@ -283,6 +395,7 @@ export function getBookLocal(routeId: string, opts?: { refresh?: boolean }): Pro
         local: { ...rowToCatalogBook(r), id: r.id, description: r.description, source: r.source },
         entry: (entry.data as BookLocalData['entry']) ?? null,
         review: review.data ? toReview(review.data as unknown as ReviewRow) : null,
+        reads,
       }
     },
     opts,
