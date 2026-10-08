@@ -10,13 +10,13 @@ export default function StarRating({
 }) {
   const t = useTheme()
   return (
-    <View style={styles.row} accessibilityRole="radiogroup" accessibilityLabel="Rating">
+    <View style={styles.row} role="radiogroup" aria-label="Rating">
       {[1, 2, 3, 4, 5].map((n) => (
         <Pressable
           key={n}
-          accessibilityRole="radio"
-          accessibilityState={{ checked: value === n }}
-          accessibilityLabel={`${n} star${n > 1 ? 's' : ''}`}
+          role="radio"
+          aria-checked={value === n}
+          aria-label={`${n} star${n > 1 ? 's' : ''}`}
           hitSlop={4}
           // Tapping the current rating again clears it.
           onPress={() => onChange(value === n ? null : n)}

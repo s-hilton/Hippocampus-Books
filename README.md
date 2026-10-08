@@ -8,6 +8,7 @@ Expo (React Native) + Supabase. See [`CLAUDE.md`](CLAUDE.md) for the architectur
 
 - **Search:** searches your own catalog and Open Library. Tap **Add** to put a book on your pile. If a book can't be found, **Add a book manually**.
 - **My Pile:** filter by status; tap a status to change it. *Read* books show stars (tap the current star again to clear it).
+- **Book page:** tap any book in Search or My Pile to see its description, series and number, authors, subjects and editions, and to add it or change its status.
 
 ## Supabase setup (one time)
 

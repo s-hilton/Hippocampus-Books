@@ -7,3 +7,7 @@ project_id = "hippocampus-books"
 [functions.search-books]
 enabled = true
 verify_jwt = true
+
+[functions.book-details]
+enabled = true
+verify_jwt = true
