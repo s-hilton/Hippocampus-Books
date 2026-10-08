@@ -88,11 +88,9 @@ export interface BookDetails {
   editions: Edition[]
 }
 
-/** Everything the book page needs: our catalog row (if any), Open Library details (if any), and the user's shelf entry. */
-export interface BookPageData {
-  local: CatalogBook & { id: string; description: string | null; source: string } | null
-  details: BookDetails | null
-  detailsError: string | null
+/** Our catalog row for a book (if we have one) and the user's shelf entry for it. */
+export interface BookLocalData {
+  local: (CatalogBook & { id: string; description: string | null; source: string }) | null
   entry: Pick<ShelfEntry, 'id' | 'status' | 'rating'> | null
 }
 
