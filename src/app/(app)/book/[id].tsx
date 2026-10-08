@@ -7,6 +7,7 @@ import {
   getBookLocal,
   peekBookDetails,
   peekBookLocal,
+  prefetchSeries,
   removeFromShelf,
   setBookLocal,
   updateShelfEntry,
@@ -52,6 +53,9 @@ export default function BookScreen() {
       .then((d) => {
         setDetails(d)
         setDetailsError(null)
+        // Load the series list now, so tapping the series shows it immediately.
+        const authorKey = d?.authors[0]?.key
+        if (d?.series && authorKey) prefetchSeries(d.series.name, authorKey)
       })
       .catch((err) => {
         setDetails((prev) => prev ?? null)

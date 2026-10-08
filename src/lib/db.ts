@@ -274,10 +274,13 @@ export interface SeriesPageData {
 const seriesCache = memoAsync<SeriesBook[]>()
 
 /** Books in a series: the saved list in series_lists if fresh, otherwise the series-books Edge Function. */
+const seriesKey = (name: string, authorKey: string) =>
+  `${normalizeSeriesName(name)}|${authorKey.match(/OL\d+A/)?.[0] ?? authorKey}`
+
 function getSeriesBooks(name: string, authorKey: string): Promise<SeriesBook[]> {
   const author = authorKey.match(/OL\d+A/)?.[0] ?? authorKey
   const nameKey = normalizeSeriesName(name)
-  return seriesCache.load(`${nameKey}|${author}`, async () => {
+  return seriesCache.load(seriesKey(name, authorKey), async () => {
     const { data: saved } = await supabase
       .from('series_lists')
       .select('books, fetched_at')
@@ -295,6 +298,14 @@ function getSeriesBooks(name: string, authorKey: string): Promise<SeriesBook[]> 
     return data?.books ?? []
   })
 }
+
+/** Start loading a series list in the background (e.g. when its book page opens). */
+export function prefetchSeries(name: string, authorKey: string) {
+  getSeriesBooks(name, authorKey).catch(() => {}) // the series page will retry and show any error
+}
+
+/** The series list if it's already loaded, so the series page can draw it instantly. */
+export const peekSeriesBooks = (name: string, authorKey: string) => seriesCache.peek(seriesKey(name, authorKey))
 
 export async function getSeries(name: string, authorKey: string): Promise<SeriesPageData> {
   const [books, shelf] = await Promise.all([getSeriesBooks(name, authorKey), getShelf()])
