@@ -147,6 +147,8 @@ export function isInPile(book: CatalogBook, keys: Set<string>): boolean {
   return [book.id, book.open_library_id, book.isbn_13].some((k) => k && keys.has(k))
 }
 
+const tagsCache = memoAsync<{ tropes: Tag[]; warnings: Tag[] }>()
+
 const REVIEW_FIELDS = 'id, book_id, rating, body, updated_at, review_tags ( tag:tags ( kind, slug, name, category ) )'
 
 type ReviewRow = Omit<Review, 'tropes' | 'warnings'> & { review_tags: { tag: Tag | null }[] }
@@ -203,17 +205,23 @@ export async function saveReview(input: {
   bookId: string
   rating: number
   body: string
-  tropes: string[] // slugs
-  warnings: string[] // slugs
+  tropes: Tag[]
+  warnings: Tag[]
 }): Promise<Review> {
+  const existing = (tags: Tag[]) => tags.filter((t) => !t.isNew).map((t) => t.slug)
+  const typed = (tags: Tag[]) => tags.filter((t) => t.isNew).map((t) => t.name)
   const { data: id, error } = await supabase.rpc('save_review', {
     p_book_id: input.bookId,
     p_rating: input.rating,
     p_body: input.body,
-    p_tropes: input.tropes,
-    p_warnings: input.warnings,
+    p_tropes: existing(input.tropes),
+    p_warnings: existing(input.warnings),
+    p_new_tropes: typed(input.tropes),
+    p_new_warnings: typed(input.warnings),
   })
   if (error) throw error
+  // New tags were created (or matched): reload the lists next time so they appear.
+  if ([...input.tropes, ...input.warnings].some((t) => t.isNew)) tagsCache.clear('all')
   const { data, error: readError } = await supabase.from('reviews').select(REVIEW_FIELDS).eq('id', id).single()
   if (readError) throw readError
   return toReview(data as unknown as ReviewRow)
@@ -384,7 +392,6 @@ export async function getSeries(name: string, authorKey: string): Promise<Series
 // ---------------------------------------------------------------------------
 
 const PAGE = 1000 // Supabase returns at most 1,000 rows per request by default
-const tagsCache = memoAsync<{ tropes: Tag[]; warnings: Tag[] }>()
 
 /** Every trope and content warning, in list order. Loaded once per session. */
 export function getAllTags(): Promise<{ tropes: Tag[]; warnings: Tag[] }> {

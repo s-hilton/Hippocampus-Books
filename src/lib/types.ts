@@ -31,6 +31,7 @@ export interface Tag {
   slug: string
   name: string
   category: string
+  isNew?: boolean // typed by the reader in the review form; created (or matched) on save
 }
 
 /** A tag with how many readers picked it for a book. */

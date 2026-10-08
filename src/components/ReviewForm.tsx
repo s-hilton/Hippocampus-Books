@@ -61,8 +61,8 @@ function Form({
   const [body, setBody] = useState(existing?.body ?? '')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [tropes, setTropes] = useState<string[]>(existing?.tropes.map((t) => t.slug) ?? [])
-  const [warnings, setWarnings] = useState<string[]>(existing?.warnings.map((t) => t.slug) ?? [])
+  const [tropes, setTropes] = useState<Tag[]>(existing?.tropes ?? [])
+  const [warnings, setWarnings] = useState<Tag[]>(existing?.warnings ?? [])
   const [allTags, setAllTags] = useState<{ tropes: Tag[]; warnings: Tag[] } | null>(null)
 
   useEffect(() => {
@@ -123,6 +123,7 @@ function Form({
 
           <TagPicker
             label="Tropes (optional)"
+            kind="trope"
             noun="tropes"
             tags={allTags?.tropes ?? null}
             selected={tropes}
@@ -130,6 +131,7 @@ function Form({
           />
           <TagPicker
             label="Content warnings (optional)"
+            kind="content_warning"
             noun="content warnings"
             tags={allTags?.warnings ?? null}
             selected={warnings}

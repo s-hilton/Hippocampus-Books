@@ -33,6 +33,7 @@ export function memoAsync<T>() {
   const inFlight = new Map<string, Promise<T>>()
   return {
     peek: (key: string) => values.get(key),
+    clear: (key: string) => values.delete(key),
     set: (key: string, value: T) => values.set(key, value),
     load(key: string, loader: () => Promise<T>, { refresh = false } = {}): Promise<T> {
       const pending = inFlight.get(key)
