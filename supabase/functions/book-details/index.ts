@@ -10,7 +10,17 @@
 
 import { authError, catalogBooks, inBackground, openLibraryHeaders, serviceClient } from '../_shared/db.ts'
 import { olGetJson } from '../_shared/openLibrary.ts'
-import { buildDetails, type BookDetails, type OLAuthor, type OLEdition, type OLWork } from './parse.ts'
+import {
+  authorKeys,
+  buildDetails,
+  str,
+  structuredSeriesRef,
+  type BookDetails,
+  type OLAuthor,
+  type OLEdition,
+  type OLWork,
+  type SeriesInfo,
+} from './parse.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -26,6 +36,18 @@ function json(body: unknown, status = 200) {
 }
 
 Deno.serve(async (req) => {
+  try {
+    return await handle(req)
+  } catch (err) {
+    // Unexpected data from Open Library must never crash the function: an uncaught error
+    // returns a bare 500 without CORS headers, which browsers report as "Failed to send a
+    // request". Reply with a readable error instead, and log the details.
+    console.error('book-details crashed:', err instanceof Error ? (err.stack ?? err.message) : err)
+    return json({ error: 'Something went wrong reading this book from Open Library. Please try again.' }, 500)
+  }
+})
+
+async function handle(req: Request): Promise<Response> {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
   if (req.method !== 'POST') return json({ error: 'Method not allowed' }, 405)
   const unauthorized = await authError(req)
@@ -52,19 +74,30 @@ Deno.serve(async (req) => {
       : json({ error: 'Open Library is busy or unavailable. Please try again.' }, 503)
   }
 
-  const authorKeys = (work.data.authors ?? []).flatMap((a) => (a.author?.key ? [a.author.key] : [])).slice(0, 5)
-  const authorResults = await Promise.all(authorKeys.map((key) => olGetJson<OLAuthor>(`${key}.json`, { headers })))
-  const authors = authorResults.flatMap((r) => (r.ok ? [r.data] : []))
+  // Authors and a linked series record (if any) are fetched together.
+  const seriesRef = structuredSeriesRef(work.data)
+  const [authorResults, seriesRecord] = await Promise.all([
+    Promise.all(authorKeys(work.data).map((key) => olGetJson<OLAuthor>(`${key}.json`, { headers }))),
+    seriesRef && !seriesRef.name && seriesRef.key
+      ? olGetJson<{ name?: unknown; title?: unknown }>(`${seriesRef.key}.json`, { headers })
+      : Promise.resolve(null),
+  ])
+  const authors = authorResults.flatMap((r) => (r.ok && r.data && typeof r.data === 'object' ? [r.data] : []))
+  const seriesName =
+    seriesRef?.name ?? (seriesRecord?.ok ? (str(seriesRecord.data?.name) ?? str(seriesRecord.data?.title)) : null)
+  const structuredSeries: SeriesInfo | null = seriesName ? { name: seriesName, number: seriesRef?.position ?? null } : null
 
-  const editions = editionsPage.ok ? editionsPage.data.entries : []
-  const details = buildDetails(work.data, editions, editionsPage.ok ? editionsPage.data.size : 0, authors)
+  const page = editionsPage.ok ? editionsPage.data : null
+  const editions: OLEdition[] = Array.isArray(page?.entries) ? page.entries : []
+  const editionCount = typeof page?.size === 'number' ? page.size : editions.length
+  const details = buildDetails(work.data, editions, editionCount, authors, structuredSeries)
 
   // Only save complete results; a partial one would be reused for 30 days.
   const complete = editionsPage.ok && authorResults.every((r) => r.ok || r.notFound)
   if (complete) save(details)
   else console.error(`book-details ${workId}: partial result not saved`)
   return json(details)
-})
+}
 
 function save(details: BookDetails) {
   const db = serviceClient()

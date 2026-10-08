@@ -40,6 +40,8 @@ A book reading tracker (think Goodreads / The StoryGraph). Expo (React Native) a
 - Every table has RLS enabled with explicit policies.
 - Book cover = the newest edition's cover (same main language, not audio), falling back to Open Library's default (`pickCover` in `book-details/parse.ts`).
 - Function auth: `verify_jwt = false` in `config.toml` on purpose. Each function calls `authError(req)` (`_shared/db.ts`), which verifies the user's token with `getClaims()`; the gateway's legacy `verify_jwt` check rejects tokens signed with the new asymmetric signing keys.
+- Open Library data is untrusted: fields can be strings, lists, objects, numbers or missing. Parse via the `str`/`items`/`seriesEntries` helpers in `book-details/parse.ts` and never assume a shape. Every function wraps its handler in try/catch: an uncaught error returns a bare 500 without CORS headers, which browsers report as "Failed to send a request to the Edge Function".
+- Series: a work's structured series record (`{ series: { key: "/series/OL…L" }, position }`) wins over guesses from edition text; book-details looks up its name.
 - Errors: Edge Functions return `{ error: "readable reason" }` (503 when Open Library is busy, 404 when not found); `functionError()` in `db.ts` surfaces it. Screens offer "Try again" rather than a dead end.
 - Search runs as you type (catalog after a 250ms pause, Open Library after 700ms and 3+ characters; the Search button skips the wait). Opening a book page preloads its series list (`prefetchSeries`).
 - Speed: screens show what's already known first (catalog rows, memory, saved data) and fill in from Open Library after; never block a whole screen on an Edge Function. Edge Functions save in the background (`inBackground`) after responding.
