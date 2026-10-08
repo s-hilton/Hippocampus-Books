@@ -1,10 +1,13 @@
 // Lists the books in a series. Open Library has no series lookup, so this takes the
 // series author's works and keeps those whose editions name the same series.
+// Results are saved in public.series_lists and reused until stale (see isFresh).
 //
 // Request:  POST { "name": "Dune Chronicles", "author_key": "/authors/OL79034A" }
-// Response: { "name": string, "books": SeriesBook[] }   (see build.ts)
+// Response: { "name": string, "books": SeriesBook[], "fetched_at": string, "cached": boolean }
 
-import { buildSeries, type CandidateWork } from './build.ts'
+import { createClient } from 'npm:@supabase/supabase-js@2'
+import { normalizeSeriesName } from '../_shared/series.ts'
+import { buildSeries, isFresh, type CandidateWork, type SeriesBook } from './build.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -70,6 +73,25 @@ Deno.serve(async (req) => {
   }
   if (!name || !authorKey) return json({ error: 'name and author_key are required' }, 400)
 
+  // Saved lists are written with the service role (users can only read them). Supabase
+  // provides these variables to Edge Functions; without them we skip saving.
+  const url = Deno.env.get('SUPABASE_URL')
+  const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
+  const db = url && serviceKey ? createClient(url, serviceKey, { auth: { persistSession: false } }) : null
+  const nameKey = normalizeSeriesName(name)
+
+  if (db) {
+    const { data: saved } = await db
+      .from('series_lists')
+      .select('name, books, fetched_at')
+      .eq('name_key', nameKey)
+      .eq('author_key', authorKey)
+      .maybeSingle()
+    if (saved && isFresh(saved.fetched_at, (saved.books as SeriesBook[]).length)) {
+      return json({ name: saved.name, books: saved.books, fetched_at: saved.fetched_at, cached: true })
+    }
+  }
+
   const params = new URLSearchParams({
     q: `author_key:${authorKey}`,
     limit: String(MAX_WORKS),
@@ -89,5 +111,17 @@ Deno.serve(async (req) => {
     }
   })
 
-  return json({ name, books: buildSeries(name, candidates) })
+  const books = buildSeries(name, candidates)
+  const fetchedAt = new Date().toISOString()
+  if (db) {
+    const { error } = await db
+      .from('series_lists')
+      .upsert(
+        { name, name_key: nameKey, author_key: authorKey, books, fetched_at: fetchedAt },
+        { onConflict: 'name_key,author_key' },
+      )
+    if (error) console.error('Could not save series list', error.message) // still return the fresh result
+  }
+
+  return json({ name, books, fetched_at: fetchedAt, cached: false })
 })

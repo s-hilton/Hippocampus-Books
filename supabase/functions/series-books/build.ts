@@ -49,3 +49,14 @@ export function buildSeries(target: string, works: CandidateWork[]): SeriesBook[
     number,
   }))
 }
+
+const DAY_MS = 24 * 60 * 60 * 1000
+
+/**
+ * Whether a saved series list can be reused. Lists refresh after 30 days; an empty
+ * list after 1 day, since that's more likely a temporary Open Library problem.
+ */
+export function isFresh(fetchedAt: string, bookCount: number, now = Date.now()): boolean {
+  const age = now - new Date(fetchedAt).getTime()
+  return Number.isFinite(age) && age >= 0 && age < (bookCount > 0 ? 30 : 1) * DAY_MS
+}

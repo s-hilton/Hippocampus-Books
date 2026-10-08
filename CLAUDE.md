@@ -18,13 +18,14 @@ A book reading tracker (think Goodreads / The StoryGraph). Expo (React Native) a
 - `src/lib/`: supabase client, auth context, types, theme.
 - `src/components/`: shared UI.
 - `supabase/migrations/`: every schema change, RLS policy, trigger and function.
-- `supabase/functions/`: Edge Functions (Deno; excluded from the app's tsconfig). `search-books` = search; `book-details` = description, authors, series, subjects and editions for one work; `series-books` = books in a series (checks up to 40 of the author's works for matching edition series strings). Shared code goes in `_shared/` (e.g. `_shared/series.ts` for series parsing and name matching). Keep logic in Deno-free modules (`book-details/parse.ts`, `series-books/build.ts`) so it can be tested with `node --experimental-strip-types`.
+- `supabase/functions/`: Edge Functions (Deno; excluded from the app's tsconfig). `search-books` = search; `book-details` = description, authors, series, subjects and editions for one work; `series-books` = books in a series (checks up to 40 of the author's works for matching edition series strings; results saved in `series_lists`). Shared code goes in `_shared/` (e.g. `_shared/series.ts` for series parsing and name matching). Keep logic in Deno-free modules (`book-details/parse.ts`, `series-books/build.ts`) so it can be tested with `node --experimental-strip-types`.
 
 ## Data model
 
 - `books`, `authors`, `book_authors`: shared catalog. Unique on `open_library_id`, `isbn_13`, `isbn_10` to prevent duplicates. Readable by any signed-in user; only `source = 'user'` books are editable, by their creator.
 - `user_books`: a user's shelf (`status`: want_to_read | reading | read, `rating` 1–5 only when read, `current_page`, `started_at`, `finished_at`). A trigger fills the dates and clears `rating` when status leaves `read`.
 - `profiles`: created by trigger on sign-up.
+- `series_lists`: saved results of `series-books`, keyed by (`name_key`, `author_key`); reused for 30 days (1 day if empty). Written only by the Edge Function with the service role; signed-in users can read.
 - Books are added **only** via the `add_book_to_pile(p_book jsonb)` RPC, which finds or creates the book (matching on `id`, then Open Library id, then ISBN) and adds it to the caller's shelf.
 - Book details (description, series, editions) are fetched live from Open Library by `book-details`; they are not stored. Series info is best-effort, parsed from Open Library edition data; series lists only find books by the series' first author.
 
