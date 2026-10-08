@@ -1,5 +1,5 @@
-import { Pressable, StyleSheet, View } from 'react-native'
-import { Text } from './Text'
+import { Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native'
+import StarIcon from './StarIcon'
 import { useTheme } from '../lib/theme'
 
 /**
@@ -10,19 +10,19 @@ export default function StarRating({
   value,
   onChange,
   size = 24,
+  style,
 }: {
   value: number | null
   onChange?: (rating: number) => void
   size?: number
+  style?: StyleProp<ViewStyle>
 }) {
   const t = useTheme()
-  const star = (n: number) => (
-    <Text style={[styles.star, { fontSize: size, color: value !== null && n <= value ? t.star : t.border }]}>★</Text>
-  )
+  const star = (n: number) => <StarIcon size={size} color={value !== null && n <= value ? t.star : t.border} />
 
   if (!onChange) {
     return (
-      <View style={styles.row} role="img" aria-label={value ? `Rated ${value} out of 5` : 'Not rated'}>
+      <View style={[styles.row, style]} role="img" aria-label={value ? `Rated ${value} out of 5` : 'Not rated'}>
         {[1, 2, 3, 4, 5].map((n) => (
           <View key={n} aria-hidden>
             {star(n)}
@@ -33,7 +33,7 @@ export default function StarRating({
   }
 
   return (
-    <View style={styles.row} role="radiogroup" aria-label="Rating">
+    <View style={[styles.row, style]} role="radiogroup" aria-label="Rating">
       {[1, 2, 3, 4, 5].map((n) => (
         <Pressable
           key={n}
@@ -51,6 +51,5 @@ export default function StarRating({
 }
 
 const styles = StyleSheet.create({
-  row: { flexDirection: 'row', gap: 4, marginTop: 6 },
-  star: {},
+  row: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 6 },
 })
