@@ -1,6 +1,6 @@
 import 'react-native-url-polyfill/auto'
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { createClient, processLock } from '@supabase/supabase-js'
+import { createClient } from '@supabase/supabase-js'
 import { AppState, Platform } from 'react-native'
 
 const url = process.env.EXPO_PUBLIC_SUPABASE_URL
@@ -14,7 +14,8 @@ export const supabase = createClient(url ?? 'http://localhost', anonKey ?? 'miss
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: false,
-    lock: processLock,
+    // No `lock` option: supabase-js now coordinates token refreshes itself, and the
+    // old processLock option is deprecated (it logged a warning on startup).
   },
 })
 
