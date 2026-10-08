@@ -23,10 +23,19 @@ export interface CatalogBook {
 }
 
 /** A row on the user's shelf (`user_books`) with its book. */
+/** A user's review of a book: stars are required, text is optional. */
+export interface Review {
+  id: string
+  book_id: string
+  rating: number
+  body: string | null
+  updated_at: string
+}
+
 export interface ShelfEntry {
   id: string
   status: ReadingStatus
-  rating: number | null
+  review: Review | null
   created_at: string
   book: {
     id: string
@@ -91,7 +100,8 @@ export interface BookDetails {
 /** Our catalog row for a book (if we have one) and the user's shelf entry for it. */
 export interface BookLocalData {
   local: (CatalogBook & { id: string; description: string | null; source: string }) | null
-  entry: Pick<ShelfEntry, 'id' | 'status' | 'rating'> | null
+  entry: Pick<ShelfEntry, 'id' | 'status'> | null
+  review: Review | null
 }
 
 /** One book in a series, from the `series-books` Edge Function. */

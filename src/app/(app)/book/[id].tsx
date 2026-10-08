@@ -23,11 +23,13 @@ import {
   type CatalogBook,
   type Edition,
   type ReadingStatus,
+  type Review,
 } from '../../../lib/types'
 import { useTheme, type Theme } from '../../../lib/theme'
 import BookCover from '../../../components/BookCover'
 import Chip from '../../../components/Chip'
 import ExpandableText from '../../../components/ExpandableText'
+import ReviewForm from '../../../components/ReviewForm'
 import StarRating from '../../../components/StarRating'
 import { Button, ErrorText, Loading } from '../../../components/ui'
 
@@ -48,6 +50,7 @@ export default function BookScreen() {
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [showAllEditions, setShowAllEditions] = useState(false)
+  const [reviewOpen, setReviewOpen] = useState(false)
 
   const loadDetails = useCallback((workKey: string) => {
     getBookDetails(workKey)
@@ -91,6 +94,7 @@ export default function BookScreen() {
 
   const local = localData?.local ?? null
   const entry = localData?.entry ?? null
+  const review = localData?.review ?? null
 
   if (!details && !local && !preview) {
     if (error) {
@@ -161,18 +165,21 @@ export default function BookScreen() {
     }
   }
 
-  async function change(changes: { status?: ReadingStatus; rating?: number | null }) {
+  async function setStatus(status: ReadingStatus) {
     if (!entry || !localData) return
-    const applied = { ...changes }
-    if (changes.status && changes.status !== 'read') applied.rating = null // mirrors the database trigger
     const previous = localData
-    updateLocal({ ...localData, entry: { ...entry, ...applied } })
+    updateLocal({ ...localData, entry: { ...entry, status } })
     try {
-      await updateShelfEntry(entry.id, changes)
+      await updateShelfEntry(entry.id, { status })
     } catch (err) {
       updateLocal(previous)
       setError(err instanceof Error ? err.message : 'Could not save change.')
     }
+  }
+
+  function setReview(review: Review | null) {
+    if (localData) updateLocal({ ...localData, review })
+    setReviewOpen(false)
   }
 
   async function remove() {
@@ -239,10 +246,23 @@ export default function BookScreen() {
           <>
             <View style={styles.chips}>
               {STATUSES.map((s) => (
-                <Chip key={s} label={STATUS_LABELS[s]} active={entry.status === s} onPress={() => change({ status: s })} />
+                <Chip key={s} label={STATUS_LABELS[s]} active={entry.status === s} onPress={() => setStatus(s)} />
               ))}
             </View>
-            {entry.status === 'read' && <StarRating value={entry.rating} onChange={(rating) => change({ rating })} />}
+            {entry.status === 'read' &&
+              (review ? (
+                <View style={styles.review}>
+                  <StarRating value={review.rating} />
+                  {review.body && <ExpandableText text={review.body} lines={4} />}
+                  <View style={styles.left}>
+                    <Button variant="link" title="Edit review" onPress={() => setReviewOpen(true)} />
+                  </View>
+                </View>
+              ) : (
+                <View style={[styles.left, styles.reviewButton]}>
+                  <Button variant="secondary" title="Leave a review" onPress={() => setReviewOpen(true)} />
+                </View>
+              ))}
             <View style={styles.left}>
               <Button variant="link" title="Remove from pile" onPress={remove} />
             </View>
@@ -338,6 +358,17 @@ export default function BookScreen() {
           </Text>
         </Pressable>
       )}
+      {local && (
+        <ReviewForm
+          visible={reviewOpen}
+          bookId={local.id}
+          bookTitle={title}
+          existing={review}
+          onClose={() => setReviewOpen(false)}
+          onSaved={setReview}
+          onDeleted={() => setReview(null)}
+        />
+      )}
     </ScrollView>
   )
 }
@@ -386,6 +417,8 @@ const styles = StyleSheet.create({
   sectionTitle: { fontSize: 17, fontWeight: '700' },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   left: { alignItems: 'flex-start' },
+  review: { gap: 6 },
+  reviewButton: { marginTop: 8 },
   tag: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 3 },
   author: { gap: 4, marginBottom: 8 },
   authorName: { fontSize: 15, fontWeight: '600' },

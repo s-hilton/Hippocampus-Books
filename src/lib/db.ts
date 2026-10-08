@@ -3,7 +3,16 @@ import { supabase } from './supabase'
 import { isFresh, normalizeQuery, TTL_DAYS } from '../../supabase/functions/_shared/cache'
 import { normalizeSeriesName } from '../../supabase/functions/_shared/series'
 import { memoAsync } from './memory'
-import type { BookDetails, BookLocalData, CatalogBook, ManualBookInput, ReadingStatus, SeriesBook, ShelfEntry } from './types'
+import type {
+  BookDetails,
+  BookLocalData,
+  CatalogBook,
+  ManualBookInput,
+  ReadingStatus,
+  Review,
+  SeriesBook,
+  ShelfEntry,
+} from './types'
 
 /**
  * Edge Function errors from supabase-js have a generic message ("non-2xx status code");
@@ -136,17 +145,25 @@ export function isInPile(book: CatalogBook, keys: Set<string>): boolean {
   return [book.id, book.open_library_id, book.isbn_13].some((k) => k && keys.has(k))
 }
 
+const REVIEW_FIELDS = 'id, book_id, rating, body, updated_at'
+
 export async function getShelf(): Promise<ShelfEntry[]> {
-  const { data, error } = await supabase
-    .from('user_books')
-    .select(`id, status, rating, created_at, book:books ( id, open_library_id, title, cover_url, book_authors ( position, author:authors ( name ) ) )`)
-    .order('created_at', { ascending: false })
-  if (error) throw error
-  type Row = Omit<ShelfEntry, 'book'> & {
+  const [shelf, reviews] = await Promise.all([
+    supabase
+      .from('user_books')
+      .select(`id, status, created_at, book:books ( id, open_library_id, title, cover_url, book_authors ( position, author:authors ( name ) ) )`)
+      .order('created_at', { ascending: false }),
+    supabase.from('reviews').select(REVIEW_FIELDS), // RLS: only the user's own
+  ])
+  if (shelf.error) throw shelf.error
+  if (reviews.error) throw reviews.error
+  const reviewByBook = new Map((reviews.data as Review[]).map((r) => [r.book_id, r]))
+  type Row = Omit<ShelfEntry, 'book' | 'review'> & {
     book: Pick<BookRow, 'id' | 'open_library_id' | 'title' | 'cover_url' | 'book_authors'>
   }
-  return (data as unknown as Row[]).map((row) => ({
+  return (shelf.data as unknown as Row[]).map((row) => ({
     ...row,
+    review: reviewByBook.get(row.book.id) ?? null,
     book: {
       id: row.book.id,
       open_library_id: row.book.open_library_id,
@@ -157,12 +174,27 @@ export async function getShelf(): Promise<ShelfEntry[]> {
   }))
 }
 
-/** Changing status away from "read" clears the rating (done by a database trigger). */
-export async function updateShelfEntry(
-  id: string,
-  changes: { status?: ReadingStatus; rating?: number | null },
-): Promise<void> {
+export async function updateShelfEntry(id: string, changes: { status: ReadingStatus }): Promise<void> {
   const { error } = await supabase.from('user_books').update(changes).eq('id', id)
+  if (error) throw error
+}
+
+/**
+ * Save a review: updates the existing one if there is one, otherwise creates it (only
+ * allowed for books marked Read). Stars are required; empty text is stored as null.
+ */
+export async function saveReview(input: { bookId: string; rating: number; body: string; existingId?: string }): Promise<Review> {
+  const body = input.body.trim() || null
+  const query = input.existingId
+    ? supabase.from('reviews').update({ rating: input.rating, body }).eq('id', input.existingId)
+    : supabase.from('reviews').insert({ book_id: input.bookId, rating: input.rating, body })
+  const { data, error } = await query.select(REVIEW_FIELDS).single()
+  if (error) throw error
+  return data as Review
+}
+
+export async function deleteReview(id: string): Promise<void> {
+  const { error } = await supabase.from('reviews').delete().eq('id', id)
   if (error) throw error
 }
 
@@ -206,16 +238,17 @@ export function getBookLocal(routeId: string, opts?: { refresh?: boolean }): Pro
         .maybeSingle()
       if (error) throw error
       const r = row as unknown as BookRow | null
-      if (!r) return { local: null, entry: null }
-      const { data: entry, error: entryError } = await supabase
-        .from('user_books')
-        .select('id, status, rating')
-        .eq('book_id', r.id)
-        .maybeSingle()
-      if (entryError) throw entryError
+      if (!r) return { local: null, entry: null, review: null }
+      const [entry, review] = await Promise.all([
+        supabase.from('user_books').select('id, status').eq('book_id', r.id).maybeSingle(),
+        supabase.from('reviews').select(REVIEW_FIELDS).eq('book_id', r.id).maybeSingle(),
+      ])
+      if (entry.error) throw entry.error
+      if (review.error) throw review.error
       return {
         local: { ...rowToCatalogBook(r), id: r.id, description: r.description, source: r.source },
-        entry: (entry as BookLocalData['entry']) ?? null,
+        entry: (entry.data as BookLocalData['entry']) ?? null,
+        review: (review.data as Review | null) ?? null,
       }
     },
     opts,

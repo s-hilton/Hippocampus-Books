@@ -4,10 +4,11 @@ import { Text } from '../../../components/Text'
 import { useFocusEffect } from 'expo-router'
 import { getShelf, removeFromShelf, updateShelfEntry } from '../../../lib/db'
 import { openBook, warmBook } from '../../../lib/navigation'
-import { STATUSES, STATUS_LABELS, type ReadingStatus, type ShelfEntry } from '../../../lib/types'
+import { STATUSES, STATUS_LABELS, type ReadingStatus, type Review, type ShelfEntry } from '../../../lib/types'
 import { useTheme } from '../../../lib/theme'
 import BookCover from '../../../components/BookCover'
 import Chip from '../../../components/Chip'
+import ReviewForm from '../../../components/ReviewForm'
 import StarRating from '../../../components/StarRating'
 import { Button, ErrorText, Loading, Screen } from '../../../components/ui'
 
@@ -19,6 +20,7 @@ export default function PileScreen() {
   const [filter, setFilter] = useState<Filter>('all')
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [reviewing, setReviewing] = useState<ShelfEntry | null>(null) // book whose review form is open
 
   const load = useCallback(async () => {
     try {
@@ -35,18 +37,21 @@ export default function PileScreen() {
     }, [load]),
   )
 
-  // Optimistically apply a change, rolling back if the database rejects it.
-  async function change(entry: ShelfEntry, changes: Partial<Pick<ShelfEntry, 'status' | 'rating'>>) {
-    const local = { ...changes }
-    if (changes.status && changes.status !== 'read') local.rating = null // mirrors the database trigger
+  // Optimistically apply a status change, rolling back if the database rejects it.
+  async function setStatus(entry: ShelfEntry, status: ReadingStatus) {
     const previous = entries
-    setEntries((prev) => prev?.map((e) => (e.id === entry.id ? { ...e, ...local } : e)) ?? null)
+    setEntries((prev) => prev?.map((e) => (e.id === entry.id ? { ...e, status } : e)) ?? null)
     try {
-      await updateShelfEntry(entry.id, changes)
+      await updateShelfEntry(entry.id, { status })
     } catch (err) {
       setEntries(previous)
       setError(err instanceof Error ? err.message : 'Could not save change.')
     }
+  }
+
+  function setReview(bookId: string, review: Review | null) {
+    setEntries((prev) => prev?.map((e) => (e.book.id === bookId ? { ...e, review } : e)) ?? null)
+    setReviewing(null)
   }
 
   async function remove(entry: ShelfEntry) {
@@ -109,16 +114,37 @@ export default function PileScreen() {
               </Pressable>
               <View style={styles.statusRow}>
                 {STATUSES.map((s) => (
-                  <Chip key={s} label={STATUS_LABELS[s]} active={item.status === s} onPress={() => change(item, { status: s })} />
+                  <Chip key={s} label={STATUS_LABELS[s]} active={item.status === s} onPress={() => setStatus(item, s)} />
                 ))}
               </View>
-              {item.status === 'read' && (
-                <StarRating value={item.rating} onChange={(rating) => change(item, { rating })} />
-              )}
+              {item.status === 'read' &&
+                (item.review ? (
+                  <Pressable
+                    role="button"
+                    aria-label={`Rated ${item.review.rating} out of 5. Edit your review`}
+                    onPress={() => setReviewing(item)}
+                  >
+                    <StarRating value={item.review.rating} />
+                  </Pressable>
+                ) : (
+                  <View style={styles.reviewButton}>
+                    <Button variant="secondary" title="Leave a review" onPress={() => setReviewing(item)} />
+                  </View>
+                ))}
             </View>
             <Button variant="link" title="Remove" onPress={() => remove(item)} />
           </View>
         )}
+      />
+
+      <ReviewForm
+        visible={reviewing !== null}
+        bookId={reviewing?.book.id ?? ''}
+        bookTitle={reviewing?.book.title ?? ''}
+        existing={reviewing?.review ?? null}
+        onClose={() => setReviewing(null)}
+        onSaved={(review) => reviewing && setReview(reviewing.book.id, review)}
+        onDeleted={() => reviewing && setReview(reviewing.book.id, null)}
       />
     </Screen>
   )
@@ -130,4 +156,5 @@ const styles = StyleSheet.create({
   info: { flex: 1, gap: 2 },
   title: { fontSize: 16, fontWeight: '600' },
   statusRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 6 },
+  reviewButton: { alignItems: 'flex-start', marginTop: 8 },
 })
