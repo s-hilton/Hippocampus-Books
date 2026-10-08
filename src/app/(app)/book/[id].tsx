@@ -53,9 +53,9 @@ export default function BookScreen() {
         setDetails(d)
         setDetailsError(null)
       })
-      .catch(() => {
+      .catch((err) => {
         setDetails((prev) => prev ?? null)
-        setDetailsError('Couldn’t load full details from Open Library.')
+        setDetailsError(err instanceof Error ? err.message : 'Couldn’t load details from Open Library.')
       })
   }, [])
 
@@ -75,6 +75,14 @@ export default function BookScreen() {
   }, [id, routeWorkKey, loadDetails])
 
   useFocusEffect(load)
+
+  function retryDetails() {
+    const key = routeWorkKey ?? localData?.local?.open_library_id
+    if (!key) return
+    setDetailsError(null)
+    setDetails(undefined)
+    loadDetails(key)
+  }
 
   const local = localData?.local ?? null
   const entry = localData?.entry ?? null
@@ -247,7 +255,9 @@ export default function BookScreen() {
         {description ? (
           <ExpandableText text={description} />
         ) : (
-          <Text style={{ color: t.muted }}>{details === undefined ? 'Loading…' : 'No description available.'}</Text>
+          <Text style={{ color: t.muted }}>
+            {details === undefined ? 'Loading…' : detailsError ? 'Not available right now.' : 'No description available.'}
+          </Text>
         )}
       </Section>
 
@@ -305,7 +315,12 @@ export default function BookScreen() {
 
       {local?.source === 'user' && <Text style={{ color: t.muted, marginTop: 8 }}>Added manually by a reader.</Text>}
 
-      {detailsError && <Text style={{ color: t.muted, marginTop: 8 }}>{detailsError}</Text>}
+      {detailsError && (
+        <View style={[styles.retry, { borderColor: t.border }]}>
+          <Text style={{ color: t.muted, flex: 1 }}>{detailsError}</Text>
+          <Button variant="secondary" title="Try again" onPress={retryDetails} />
+        </View>
+      )}
 
       {details && (
         <Pressable
@@ -372,4 +387,5 @@ const styles = StyleSheet.create({
   edition: { flexDirection: 'row', gap: 12, paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth },
   editionText: { flex: 1, gap: 2 },
   source: { marginTop: 24, alignItems: 'center' },
+  retry: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 16, padding: 12, borderWidth: 1, borderRadius: 8 },
 })

@@ -2,6 +2,7 @@
 // SUPABASE_SERVICE_ROLE_KEY to every function; if they're missing we skip saving.
 
 import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2'
+import { olHeaders } from './openLibrary.ts'
 
 let client: SupabaseClient | null | undefined
 
@@ -32,4 +33,9 @@ export function catalogBooks(books: object[]): void {
     const { error } = await db.rpc('catalog_books', { p_books: books })
     if (error) throw error
   })
+}
+
+/** Headers for Open Library requests, including the OPEN_LIBRARY_CONTACT secret if set. */
+export function openLibraryHeaders(): Record<string, string> {
+  return olHeaders(Deno.env.get('OPEN_LIBRARY_CONTACT'))
 }

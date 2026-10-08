@@ -9,7 +9,8 @@
 // Response: { "results": CatalogBook[] }
 
 import { normalizeQuery } from '../_shared/cache.ts'
-import { catalogBooks, inBackground, serviceClient } from '../_shared/db.ts'
+import { catalogBooks, inBackground, openLibraryHeaders, serviceClient } from '../_shared/db.ts'
+import { olGetJson } from '../_shared/openLibrary.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -79,12 +80,15 @@ Deno.serve(async (req) => {
     limit: '20',
     fields: 'key,title,subtitle,author_name,cover_i,first_publish_year,number_of_pages_median,isbn',
   })
-  const res = await fetch(`https://openlibrary.org/search.json?${params}`, {
-    headers: { 'User-Agent': 'HippocampusBooks/0.1 (book tracker)' },
+  const search = await olGetJson<{ docs: OpenLibraryDoc[] }>(`/search.json?${params}`, {
+    headers: openLibraryHeaders(),
+    timeoutMs: 10000,
   })
-  if (!res.ok) return json({ error: `Open Library search failed (${res.status})` }, 502)
-
-  const data = (await res.json()) as { docs: OpenLibraryDoc[] }
+  if (!search.ok) {
+    console.error(`search-books "${query}": ${search.message}`)
+    return json({ error: 'Open Library is busy or unavailable. Please try again.' }, 503)
+  }
+  const data = search.data
   const results = data.docs.map(normalize)
 
   const db = serviceClient()

@@ -19,7 +19,7 @@ export interface OLWork {
   subjects?: string[]
   first_publish_date?: string
   covers?: number[]
-  series?: string[]
+  series?: string[] | string
 }
 
 export interface OLEdition {
@@ -34,7 +34,7 @@ export interface OLEdition {
   physical_format?: string
   languages?: { key: string }[]
   covers?: number[]
-  series?: string[]
+  series?: string[] | string
 }
 
 export interface OLAuthor {
@@ -109,8 +109,11 @@ export function cleanText(text: string | OLText | undefined): string | null {
 }
 
 /** Pick the series name most editions agree on, and the most common number for it. */
+/** Open Library list fields are occasionally a single string; treat that as a one-item list. */
+export const asList = (v: string[] | string | undefined): string[] => (Array.isArray(v) ? v : v ? [v] : [])
+
 export function pickSeries(work: OLWork, editions: OLEdition[]): SeriesInfo | null {
-  const parsed = [...(work.series ?? []), ...editions.flatMap((e) => e.series ?? [])]
+  const parsed = [...asList(work.series), ...editions.flatMap((e) => asList(e.series))]
     .map(parseSeries)
     .filter((s): s is SeriesInfo => s !== null)
   if (parsed.length === 0) return null
@@ -133,8 +136,30 @@ export function pickSeries(work: OLWork, editions: OLEdition[]): SeriesInfo | nu
 
 const yearOf = (date: string | undefined) => Number(date?.match(/\d{4}/)?.[0] ?? 0)
 
+const languageOf = (e: OLEdition) => e.languages?.[0]?.key?.split('/').pop() ?? null
+const isAudio = (e: OLEdition) => /audio|\bcd\b|mp3|cassette/i.test(e.physical_format ?? '')
+
+/**
+ * The cover of the most recent edition that has one, so the book looks like what's in
+ * shops now. Skips audiobooks (square/odd covers) and editions in a different language
+ * from most of the book's editions. Falls back to Open Library's default cover.
+ */
+export function pickCover(work: OLWork, editions: OLEdition[]): string | null {
+  const counts = new Map<string, number>()
+  for (const e of editions) {
+    const lang = languageOf(e)
+    if (lang) counts.set(lang, (counts.get(lang) ?? 0) + 1)
+  }
+  const mainLanguage = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null
+  const newest = editions
+    .filter((e) => e.covers?.some((c) => c > 0) && !isAudio(e))
+    .filter((e) => !mainLanguage || !languageOf(e) || languageOf(e) === mainLanguage)
+    .sort((a, b) => yearOf(b.publish_date) - yearOf(a.publish_date))[0]
+  return coverUrl(newest?.covers?.find((c) => c > 0), 'L') ?? coverUrl(work.covers?.find((c) => c > 0), 'L')
+}
+
 export function normalizeEdition(e: OLEdition): Edition {
-  const lang = e.languages?.[0]?.key.split('/').pop()
+  const lang = languageOf(e)
   return {
     key: e.key,
     title: [e.title, e.subtitle].filter(Boolean).join(': ') || 'Untitled edition',
@@ -179,7 +204,7 @@ export function buildDetails(
     first_published: work.first_publish_date ?? (Number.isFinite(firstYear) ? String(firstYear) : null),
     page_count: median(editions.map((e) => e.number_of_pages ?? 0).filter((n) => n > 0)),
     subjects: (work.subjects ?? []).filter((s) => s.length <= 40).slice(0, 12),
-    cover_url: coverUrl(work.covers?.find((c) => c > 0), 'L'),
+    cover_url: pickCover(work, editions),
     edition_count: editionCount,
     editions: [...editions]
       .sort((a, b) => yearOf(b.publish_date) - yearOf(a.publish_date))

@@ -8,7 +8,8 @@
 // Request:  POST { "open_library_id": "/works/OL45804W" }   (or just "OL45804W")
 // Response: BookDetails
 
-import { catalogBooks, inBackground, serviceClient } from '../_shared/db.ts'
+import { catalogBooks, inBackground, openLibraryHeaders, serviceClient } from '../_shared/db.ts'
+import { olGetJson } from '../_shared/openLibrary.ts'
 import { buildDetails, type BookDetails, type OLAuthor, type OLEdition, type OLWork } from './parse.ts'
 
 const corsHeaders = {
@@ -17,20 +18,11 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 }
 
-const OL = 'https://openlibrary.org'
-const headers = { 'User-Agent': 'HippocampusBooks/0.1 (book tracker)' }
-
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   })
-}
-
-async function getJson<T>(path: string): Promise<T | null> {
-  const res = await fetch(`${OL}${path}`, { headers })
-  if (!res.ok) return null
-  return (await res.json()) as T
 }
 
 Deno.serve(async (req) => {
@@ -46,20 +38,29 @@ Deno.serve(async (req) => {
   const workId = id.match(/OL\d+W/)?.[0]
   if (!workId) return json({ error: 'open_library_id must be a work id like /works/OL45804W' }, 400)
 
+  const headers = openLibraryHeaders()
   const [work, editionsPage] = await Promise.all([
-    getJson<OLWork>(`/works/${workId}.json`),
-    getJson<{ size: number; entries: OLEdition[] }>(`/works/${workId}/editions.json?limit=50`),
+    olGetJson<OLWork>(`/works/${workId}.json`, { headers }),
+    olGetJson<{ size: number; entries: OLEdition[] }>(`/works/${workId}/editions.json?limit=50`, { headers }),
   ])
-  if (!work) return json({ error: 'Book not found on Open Library' }, 404)
+  if (!work.ok) {
+    console.error(`book-details ${workId}: ${work.message}`)
+    return work.notFound
+      ? json({ error: 'Book not found on Open Library' }, 404)
+      : json({ error: 'Open Library is busy or unavailable. Please try again.' }, 503)
+  }
 
-  const authorKeys = (work.authors ?? []).flatMap((a) => (a.author?.key ? [a.author.key] : [])).slice(0, 5)
-  const authors = (await Promise.all(authorKeys.map((key) => getJson<OLAuthor>(`${key}.json`)))).filter(
-    (a): a is OLAuthor => a !== null,
-  )
+  const authorKeys = (work.data.authors ?? []).flatMap((a) => (a.author?.key ? [a.author.key] : [])).slice(0, 5)
+  const authorResults = await Promise.all(authorKeys.map((key) => olGetJson<OLAuthor>(`${key}.json`, { headers })))
+  const authors = authorResults.flatMap((r) => (r.ok ? [r.data] : []))
 
-  const editions = editionsPage?.entries ?? []
-  const details = buildDetails(work, editions, editionsPage?.size ?? editions.length, authors)
-  save(details)
+  const editions = editionsPage.ok ? editionsPage.data.entries : []
+  const details = buildDetails(work.data, editions, editionsPage.ok ? editionsPage.data.size : 0, authors)
+
+  // Only save complete results; a partial one would be reused for 30 days.
+  const complete = editionsPage.ok && authorResults.every((r) => r.ok || r.notFound)
+  if (complete) save(details)
+  else console.error(`book-details ${workId}: partial result not saved`)
   return json(details)
 })
 
@@ -84,6 +85,7 @@ function save(details: BookDetails) {
       page_count: details.page_count,
       published_date: details.first_published,
       cover_url: details.cover_url?.replace(/-L\.jpg$/, '-M.jpg') ?? null,
+      cover_preferred: true, // newest edition's cover: replaces the catalog's older default
       isbn_13: withIsbn?.isbn_13 ?? null,
       isbn_10: withIsbn?.isbn_10 ?? null,
     },
