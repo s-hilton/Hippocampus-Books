@@ -64,6 +64,15 @@ function normalize(doc: OpenLibraryDoc): CatalogBook {
 }
 
 Deno.serve(async (req) => {
+  try {
+    return await handle(req)
+  } catch (err) {
+    console.error('search-books crashed:', err instanceof Error ? (err.stack ?? err.message) : err)
+    return json({ error: 'Something went wrong searching Open Library. Please try again.' }, 500)
+  }
+})
+
+async function handle(req: Request): Promise<Response> {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
   if (req.method !== 'POST') return json({ error: 'Method not allowed' }, 405)
   const unauthorized = await authError(req)
@@ -105,4 +114,4 @@ Deno.serve(async (req) => {
   catalogBooks(results)
 
   return json({ results })
-})
+}

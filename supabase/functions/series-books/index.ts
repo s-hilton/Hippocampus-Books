@@ -9,6 +9,7 @@ import { isFresh, TTL_DAYS } from '../_shared/cache.ts'
 import { authError, catalogBooks, inBackground, openLibraryHeaders, serviceClient } from '../_shared/db.ts'
 import { mapLimit, olGetJson } from '../_shared/openLibrary.ts'
 import { normalizeSeriesName } from '../_shared/series.ts'
+import { seriesEntries } from '../book-details/parse.ts'
 import { buildSeries, type CandidateWork, type SeriesBook } from './build.ts'
 
 const corsHeaders = {
@@ -39,6 +40,15 @@ interface SearchDoc {
 }
 
 Deno.serve(async (req) => {
+  try {
+    return await handle(req)
+  } catch (err) {
+    console.error('series-books crashed:', err instanceof Error ? (err.stack ?? err.message) : err)
+    return json({ error: 'Something went wrong building this series list. Please try again.' }, 500)
+  }
+})
+
+async function handle(req: Request): Promise<Response> {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
   if (req.method !== 'POST') return json({ error: 'Method not allowed' }, 405)
   const unauthorized = await authError(req)
@@ -87,14 +97,16 @@ Deno.serve(async (req) => {
   // Series strings live on editions (works almost never have them), so one request per work.
   let failed = 0
   const candidates: CandidateWork[] = await mapLimit(search.data.docs, CONCURRENCY, async (doc) => {
-    const editions = await olGetJson<{ entries: { series?: string[] | string }[] }>(
+    const editions = await olGetJson<{ entries?: { series?: unknown }[] }>(
       `${doc.key}/editions.json?limit=${EDITIONS_PER_WORK}`,
       { headers },
     )
     if (!editions.ok && !editions.notFound) failed++
-    const series = editions.ok
-      ? editions.data.entries.flatMap((e) => (Array.isArray(e.series) ? e.series : e.series ? [e.series] : []))
-      : []
+    const entries = editions.ok && Array.isArray(editions.data?.entries) ? editions.data.entries : []
+    const series = entries.flatMap((e) => {
+      const { text, refs } = seriesEntries(e?.series)
+      return [...text, ...refs.flatMap((r) => (r.name ? [r.position ? `${r.name} ; ${r.position}` : r.name] : []))]
+    })
     return { ...doc, series }
   })
 
@@ -126,4 +138,4 @@ Deno.serve(async (req) => {
   )
 
   return json({ name, books, fetched_at: fetchedAt, cached: false })
-})
+}
