@@ -1,4 +1,5 @@
-import { Pressable, StyleSheet, Text } from 'react-native'
+import { Pressable, StyleSheet } from 'react-native'
+import { Text } from './Text'
 import { useTheme } from '../lib/theme'
 
 export default function Chip({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {

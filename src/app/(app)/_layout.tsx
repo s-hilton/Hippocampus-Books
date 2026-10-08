@@ -1,6 +1,6 @@
 import { Redirect, Stack } from 'expo-router'
 import { useAuth } from '../../lib/auth'
-import { useTheme } from '../../lib/theme'
+import { fontFamily, useTheme } from '../../lib/theme'
 import { Loading } from '../../components/ui'
 
 // Everything in this group requires a signed-in user.
@@ -15,7 +15,7 @@ export default function AppLayout() {
     <Stack
       screenOptions={{
         headerStyle: { backgroundColor: t.bg },
-        headerTitleStyle: { color: t.text },
+        headerTitleStyle: { color: t.accent, fontFamily, fontWeight: '700' },
         headerTintColor: t.accent,
         headerShadowVisible: false,
         contentStyle: { backgroundColor: t.bg },

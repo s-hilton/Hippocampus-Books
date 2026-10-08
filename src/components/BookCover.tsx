@@ -1,5 +1,6 @@
 import { Image } from 'expo-image'
-import { StyleSheet, Text, View } from 'react-native'
+import { StyleSheet, View } from 'react-native'
+import { Text } from './Text'
 import { useTheme } from '../lib/theme'
 
 const SIZES = {

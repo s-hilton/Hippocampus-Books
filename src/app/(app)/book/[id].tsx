@@ -1,5 +1,6 @@
 import { useCallback, useState, type ReactNode } from 'react'
-import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { Linking, Pressable, ScrollView, StyleSheet, View } from 'react-native'
+import { Text } from '../../../components/Text'
 import { router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router'
 import {
   addBookToPile,
@@ -344,7 +345,7 @@ export default function BookScreen() {
 function Section({ title, t, children }: { title: string; t: Theme; children: ReactNode }) {
   return (
     <View style={[styles.section, { borderTopColor: t.border }]}>
-      <Text style={[styles.sectionTitle, { color: t.text }]}>{title}</Text>
+      <Text style={[styles.sectionTitle, { color: t.copper }]}>{title}</Text>
       {children}
     </View>
   )

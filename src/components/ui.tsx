@@ -1,7 +1,8 @@
 // Small shared building blocks so screens stay consistent.
 import type { ReactNode } from 'react'
-import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View, type TextInputProps } from 'react-native'
-import { useTheme } from '../lib/theme'
+import { ActivityIndicator, Pressable, StyleSheet, TextInput, View, type TextInputProps } from 'react-native'
+import { Text } from './Text'
+import { fontFamily, useTheme } from '../lib/theme'
 
 export function Button({
   title,
@@ -40,7 +41,7 @@ export function Input(props: TextInputProps) {
     <TextInput
       placeholderTextColor={t.muted}
       {...props}
-      style={[styles.input, { color: t.text, borderColor: t.border, backgroundColor: t.card }, props.style]}
+      style={[styles.input, { fontFamily, color: t.text, borderColor: t.border, backgroundColor: t.card }, props.style]}
     />
   )
 }
