@@ -23,6 +23,16 @@ npm install
 npx expo start        # scan the QR code with Expo Go, or press w for web
 ```
 
+## Web version on Vercel
+
+`vercel.json` tells Vercel how to build the web version: `npm run build:web` (an Expo web export into `dist/`), and send every page link to the app so links like `/book/OL45804W` work.
+
+1. In Vercel, import this GitHub repo. Leave the framework preset as **Other** and the root directory as the repo root; `vercel.json` sets the rest.
+2. Deploy. Every push to `main` redeploys.
+3. In Supabase → **Authentication → URL Configuration**, set **Site URL** to your Vercel address (e.g. `https://hippocampus-books.vercel.app`) and add it under **Redirect URLs**, so sign-up confirmation emails link back to the app.
+
+No environment variables are needed in Vercel: the public Supabase URL and key come from the committed `.env`.
+
 ## Troubleshooting Expo Go
 
 Expo Go loads the app from `npx expo start` running on your computer, so the phone has to be able to reach the computer.
