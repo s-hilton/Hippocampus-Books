@@ -9,7 +9,7 @@
 // Response: { "results": CatalogBook[] }
 
 import { normalizeQuery } from '../_shared/cache.ts'
-import { catalogBooks, inBackground, openLibraryHeaders, serviceClient } from '../_shared/db.ts'
+import { authError, catalogBooks, inBackground, openLibraryHeaders, serviceClient } from '../_shared/db.ts'
 import { olGetJson } from '../_shared/openLibrary.ts'
 
 const corsHeaders = {
@@ -66,6 +66,8 @@ function normalize(doc: OpenLibraryDoc): CatalogBook {
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
   if (req.method !== 'POST') return json({ error: 'Method not allowed' }, 405)
+  const unauthorized = await authError(req)
+  if (unauthorized) return json({ error: unauthorized }, 401)
 
   let query = ''
   try {

@@ -6,12 +6,12 @@ project_id = "hippocampus-books"
 
 [functions.search-books]
 enabled = true
-verify_jwt = true
+verify_jwt = false # checked inside the function (authError), which supports new signing keys
 
 [functions.book-details]
 enabled = true
-verify_jwt = true
+verify_jwt = false # checked inside the function (authError), which supports new signing keys
 
 [functions.series-books]
 enabled = true
-verify_jwt = true
+verify_jwt = false # checked inside the function (authError), which supports new signing keys

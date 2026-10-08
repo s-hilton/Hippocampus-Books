@@ -8,7 +8,7 @@
 // Request:  POST { "open_library_id": "/works/OL45804W" }   (or just "OL45804W")
 // Response: BookDetails
 
-import { catalogBooks, inBackground, openLibraryHeaders, serviceClient } from '../_shared/db.ts'
+import { authError, catalogBooks, inBackground, openLibraryHeaders, serviceClient } from '../_shared/db.ts'
 import { olGetJson } from '../_shared/openLibrary.ts'
 import { buildDetails, type BookDetails, type OLAuthor, type OLEdition, type OLWork } from './parse.ts'
 
@@ -28,6 +28,8 @@ function json(body: unknown, status = 200) {
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
   if (req.method !== 'POST') return json({ error: 'Method not allowed' }, 405)
+  const unauthorized = await authError(req)
+  if (unauthorized) return json({ error: unauthorized }, 401)
 
   let id = ''
   try {

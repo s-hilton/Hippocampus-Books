@@ -6,7 +6,7 @@
 // Response: { "name": string, "books": SeriesBook[], "fetched_at": string, "cached": boolean }
 
 import { isFresh, TTL_DAYS } from '../_shared/cache.ts'
-import { catalogBooks, inBackground, openLibraryHeaders, serviceClient } from '../_shared/db.ts'
+import { authError, catalogBooks, inBackground, openLibraryHeaders, serviceClient } from '../_shared/db.ts'
 import { mapLimit, olGetJson } from '../_shared/openLibrary.ts'
 import { normalizeSeriesName } from '../_shared/series.ts'
 import { buildSeries, type CandidateWork, type SeriesBook } from './build.ts'
@@ -41,6 +41,8 @@ interface SearchDoc {
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
   if (req.method !== 'POST') return json({ error: 'Method not allowed' }, 405)
+  const unauthorized = await authError(req)
+  if (unauthorized) return json({ error: unauthorized }, 401)
 
   let name = ''
   let authorKey = ''
