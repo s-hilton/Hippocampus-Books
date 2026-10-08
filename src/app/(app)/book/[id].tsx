@@ -12,25 +12,29 @@ import {
   prefetchSeries,
   removeFromShelf,
   setBookLocal,
+  startReread,
   updateShelfEntry,
   workKeyFromRouteId,
 } from '../../../lib/db'
 import { getPreview } from '../../../lib/memory'
+import { formatDate } from '../../../lib/dates'
 import {
-  STATUSES,
-  STATUS_LABELS,
+  READ_STATUS_LABELS,
   type BookDetails,
   type BookLocalData,
   type CatalogBook,
   type Edition,
+  type Read,
   type ReadingStatus,
   type Review,
   type TagCount,
 } from '../../../lib/types'
 import { useTheme, type Theme } from '../../../lib/theme'
 import BookCover from '../../../components/BookCover'
-import Chip from '../../../components/Chip'
 import ExpandableText from '../../../components/ExpandableText'
+import ProgressBar from '../../../components/ProgressBar'
+import ProgressForm from '../../../components/ProgressForm'
+import StatusPicker from '../../../components/StatusPicker'
 import CommunityTags from '../../../components/CommunityTags'
 import ReviewForm from '../../../components/ReviewForm'
 import ReviewStars from '../../../components/ReviewStars'
@@ -54,6 +58,7 @@ export default function BookScreen() {
   const [busy, setBusy] = useState(false)
   const [showAllEditions, setShowAllEditions] = useState(false)
   const [reviewOpen, setReviewOpen] = useState(false)
+  const [progressOpen, setProgressOpen] = useState(false)
   // Community tropes / content warnings for this book (null while loading).
   const [community, setCommunity] = useState<{ tropes: TagCount[]; warnings: TagCount[] } | null>(null)
 
@@ -108,6 +113,9 @@ export default function BookScreen() {
   const local = localData?.local ?? null
   const entry = localData?.entry ?? null
   const review = localData?.review ?? null
+  const reads = localData?.reads ?? []
+  const currentRead = reads.find((r) => r.status === 'reading') ?? null
+  const timesRead = reads.filter((r) => r.status === 'read').length
 
   if (!details && !local && !preview) {
     if (error) {
@@ -184,10 +192,34 @@ export default function BookScreen() {
     updateLocal({ ...localData, entry: { ...entry, status } })
     try {
       await updateShelfEntry(entry.id, { status })
+      updateLocal(await getBookLocal(id, { refresh: true })) // the database started or closed a read
     } catch (err) {
       updateLocal(previous)
       setError(err instanceof Error ? err.message : 'Could not save change.')
     }
+  }
+
+  async function reread() {
+    if (!local) return
+    setBusy(true)
+    try {
+      await startReread(local.id)
+      updateLocal(await getBookLocal(id, { refresh: true }))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not start a reread.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  function progressSaved(read: Read) {
+    setProgressOpen(false)
+    if (localData) updateLocal({ ...localData, reads: localData.reads.map((r) => (r.id === read.id ? read : r)) })
+  }
+
+  function finished() {
+    setProgressOpen(false)
+    setStatus('read')
   }
 
   function setReview(review: Review | null) {
@@ -258,22 +290,37 @@ export default function BookScreen() {
       <Section title="Your pile" t={t}>
         {entry ? (
           <>
-            <View style={styles.chips}>
-              {STATUSES.map((s) => (
-                <Chip key={s} label={STATUS_LABELS[s]} active={entry.status === s} onPress={() => setStatus(s)} />
-              ))}
-            </View>
-            {entry.status === 'read' &&
-              (review ? (
-                <View style={styles.review}>
-                  <ReviewStars rating={review.rating} onEdit={() => setReviewOpen(true)} />
-                  {review.body && <ExpandableText text={review.body} lines={4} />}
+            <StatusPicker status={entry.status} onChange={setStatus} onReread={reread} />
+            {entry.status === 'reading' && currentRead && (
+              <View style={styles.progress}>
+                <ProgressBar read={currentRead} />
+                <View style={styles.left}>
+                  <Button variant="secondary" title="Update progress" onPress={() => setProgressOpen(true)} />
                 </View>
-              ) : (
+              </View>
+            )}
+            {review ? (
+              <View style={styles.review}>
+                <ReviewStars rating={review.rating} onEdit={() => setReviewOpen(true)} />
+                {review.body && <ExpandableText text={review.body} lines={4} />}
+              </View>
+            ) : (
+              entry.status === 'read' && (
                 <View style={[styles.left, styles.reviewButton]}>
                   <Button variant="secondary" title="Leave a review" onPress={() => setReviewOpen(true)} />
                 </View>
-              ))}
+              )
+            )}
+            {(entry.status === 'read' || entry.status === 'dnf') && (
+              <View style={styles.left}>
+                <Button
+                  variant="secondary"
+                  title={entry.status === 'read' ? 'Read it again' : 'Start over'}
+                  onPress={reread}
+                  disabled={busy}
+                />
+              </View>
+            )}
             <View style={styles.left}>
               <Button variant="link" title="Remove from pile" onPress={remove} />
             </View>
@@ -286,6 +333,14 @@ export default function BookScreen() {
           </View>
         )}
       </Section>
+
+      {reads.length > 0 && (
+        <Section title={timesRead > 1 ? `Your reads · read ${timesRead} times` : 'Your reads'} t={t}>
+          {[...reads].reverse().map((r) => (
+            <ReadRow key={r.id} read={r} number={reads.indexOf(r) + 1} t={t} />
+          ))}
+        </Section>
+      )}
 
       <Section title="Description" t={t}>
         {description ? (
@@ -391,6 +446,14 @@ export default function BookScreen() {
           onDeleted={() => setReview(null)}
         />
       )}
+      <ProgressForm
+        visible={progressOpen}
+        read={currentRead}
+        bookTitle={title}
+        onClose={() => setProgressOpen(false)}
+        onSaved={progressSaved}
+        onFinished={finished}
+      />
     </ScrollView>
   )
 }
@@ -401,6 +464,28 @@ function Section({ title, t, children }: { title: string; t: Theme; children: Re
       <Text style={[styles.sectionTitle, { color: t.copper }]}>{title}</Text>
       {children}
     </View>
+  )
+}
+
+/** One read in the book page's list; opens the read page with its dates and progress chart. */
+function ReadRow({ read: r, number, t }: { read: Read; number: number; t: Theme }) {
+  const dates =
+    r.status === 'reading'
+      ? r.started_at && `Started ${formatDate(r.started_at)}`
+      : [r.started_at && formatDate(r.started_at), r.finished_at && formatDate(r.finished_at)].filter(Boolean).join(' – ')
+  return (
+    <Pressable
+      role="link"
+      aria-label={`Read ${number}: ${READ_STATUS_LABELS[r.status]}. ${dates || ''}`}
+      onPress={() => router.push(`/read/${r.id}`)}
+      style={[styles.readRow, { borderBottomColor: t.border }]}
+    >
+      <View style={styles.readText}>
+        <Text style={{ color: t.text, fontWeight: '600' }}>{`Read ${number} · ${READ_STATUS_LABELS[r.status]}`}</Text>
+        {!!dates && <Text style={{ color: t.muted }}>{dates}</Text>}
+      </View>
+      <Text style={{ color: t.accent, fontSize: 18 }}>›</Text>
+    </Pressable>
   )
 }
 
@@ -440,6 +525,15 @@ const styles = StyleSheet.create({
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   left: { alignItems: 'flex-start' },
   review: { gap: 6 },
+  progress: { gap: 6 },
+  readRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 8,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  readText: { flex: 1, gap: 2 },
   reviewButton: { marginTop: 8 },
   tag: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 3 },
   author: { gap: 4, marginBottom: 8 },

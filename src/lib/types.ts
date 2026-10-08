@@ -1,11 +1,47 @@
-export type ReadingStatus = 'want_to_read' | 'reading' | 'read'
+export type ReadingStatus = 'want_to_read' | 'reading' | 'read' | 'dnf'
 
-export const STATUSES: ReadingStatus[] = ['want_to_read', 'reading', 'read']
+export const STATUSES: ReadingStatus[] = ['want_to_read', 'reading', 'read', 'dnf']
 
 export const STATUS_LABELS: Record<ReadingStatus, string> = {
   want_to_read: 'Want to read',
   reading: 'Reading',
   read: 'Read',
+  dnf: 'DNF',
+}
+
+/** How one read of a book went: still going, finished, or did not finish. */
+export type ReadStatus = 'reading' | 'read' | 'dnf'
+
+export const READ_STATUS_LABELS: Record<ReadStatus, string> = {
+  reading: 'Reading',
+  read: 'Finished',
+  dnf: 'Did not finish',
+}
+
+/** One time through a book (`reads`). A reread is another Read. */
+export interface Read {
+  id: string
+  book_id: string
+  status: ReadStatus
+  started_at: string | null // null when marked read without starting it in the app
+  finished_at: string | null
+  current_page: number | null
+  page_count: number | null // the reader's edition
+}
+
+/** One logged page update (`reading_progress`). */
+export interface ProgressPoint {
+  id: number
+  page: number
+  logged_at: string
+}
+
+/** A read with its progress log and book, for the read page. */
+export interface ReadDetail extends Read {
+  progress: ProgressPoint[]
+  number: number // 1 = first read of this book
+  total: number // how many reads of this book the user has
+  book: { id: string; open_library_id: string | null; title: string; cover_url: string | null; authors: string[] }
 }
 
 /** A book as shown in search results: either already in our `books` table or from Open Library. */
@@ -54,6 +90,8 @@ export interface ShelfEntry {
   id: string
   status: ReadingStatus
   review: Review | null
+  currentRead: Read | null // the read in progress, if any
+  timesRead: number // finished reads (status read)
   created_at: string
   book: {
     id: string
@@ -120,6 +158,7 @@ export interface BookLocalData {
   local: (CatalogBook & { id: string; description: string | null; source: string }) | null
   entry: Pick<ShelfEntry, 'id' | 'status'> | null
   review: Review | null
+  reads: Read[] // oldest first
 }
 
 /** One book in a series, from the `series-books` Edge Function. */
