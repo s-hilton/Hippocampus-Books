@@ -32,6 +32,8 @@ A book reading tracker (think Goodreads / The StoryGraph). Expo (React Native) a
   - `series_lists`: series-books results per (`name_key`, `author_key`) (30 days). Empty results: 1 day.
 - `catalog_book(p_book, p_created_by, p_enrich)` is the one find-or-create for `books` (internal). `catalog_books(jsonb)` (service role only) adds/enriches many at once; enrichment only fills empty fields, never overwrites, and user input never enriches — except `cover_preferred: true` (sent only by book-details) replaces the cover with the newest edition's, on non-user books.
 - Users add books **only** via the `add_book_to_pile(p_book jsonb)` RPC, which uses `catalog_book` (matching on `id`, then Open Library id, then ISBN) and adds it to the caller's shelf.
+- `tags`: the fixed trope (1,204) and content warning (264) lists, `kind` + `slug` unique. Source of truth: `supabase/data/tropes.csv` and `content_warnings.csv`; `supabase/data/generate_tags_sql.py` turns them into upsert SQL for a NEW migration. More than 1,000 rows, so the app pages through them (`getAllTags`, Supabase caps responses at 1,000 rows).
+- `review_tags`: which tags a review picked (only the review's author can see/change them). Save reviews with the `save_review(...)` RPC (rating, text and tags in one step). `book_tag_counts(book_id)` (security definer) returns how many readers picked each tag: totals only, never who. Shown on the book page as "Hippocampus Community Tropes" / "Hippocampus Community Content Warnings".
 - Series info is best-effort, parsed from Open Library edition data; series lists only find books by the series' first author.
 
 ## Rules

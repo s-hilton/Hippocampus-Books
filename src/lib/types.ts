@@ -23,13 +23,30 @@ export interface CatalogBook {
 }
 
 /** A row on the user's shelf (`user_books`) with its book. */
-/** A user's review of a book: stars are required, text is optional. */
+export type TagKind = 'trope' | 'content_warning'
+
+/** A trope or content warning from the fixed lists. Identified by (kind, slug). */
+export interface Tag {
+  kind: TagKind
+  slug: string
+  name: string
+  category: string
+}
+
+/** A tag with how many readers picked it for a book. */
+export interface TagCount extends Tag {
+  readers: number
+}
+
+/** A user's review of a book: stars are required; text, tropes and warnings are optional. */
 export interface Review {
   id: string
   book_id: string
   rating: number
   body: string | null
   updated_at: string
+  tropes: Tag[]
+  warnings: Tag[]
 }
 
 export interface ShelfEntry {

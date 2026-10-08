@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native'
-import { deleteReview, saveReview } from '../lib/db'
-import type { Review } from '../lib/types'
+import { deleteReview, getAllTags, saveReview } from '../lib/db'
+import type { Review, Tag } from '../lib/types'
 import { useTheme } from '../lib/theme'
 import StarRating from './StarRating'
+import TagPicker from './TagPicker'
 import { Text } from './Text'
 import { Button, ErrorText, Input } from './ui'
 
@@ -60,13 +61,22 @@ function Form({
   const [body, setBody] = useState(existing?.body ?? '')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [tropes, setTropes] = useState<string[]>(existing?.tropes.map((t) => t.slug) ?? [])
+  const [warnings, setWarnings] = useState<string[]>(existing?.warnings.map((t) => t.slug) ?? [])
+  const [allTags, setAllTags] = useState<{ tropes: Tag[]; warnings: Tag[] } | null>(null)
+
+  useEffect(() => {
+    getAllTags()
+      .then(setAllTags)
+      .catch(() => setError('Couldn’t load tropes and content warnings. You can still save your rating and review.'))
+  }, [])
 
   async function save() {
     if (!rating) return setError('Choose a star rating.')
     setBusy(true)
     setError(null)
     try {
-      onSaved(await saveReview({ bookId, rating, body, existingId: existing?.id }))
+      onSaved(await saveReview({ bookId, rating, body, tropes, warnings }))
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not save your review.')
       setBusy(false)
@@ -109,6 +119,21 @@ function Form({
             textAlignVertical="top"
             style={styles.body}
             aria-label="Review text"
+          />
+
+          <TagPicker
+            label="Tropes (optional)"
+            noun="tropes"
+            tags={allTags?.tropes ?? null}
+            selected={tropes}
+            onChange={setTropes}
+          />
+          <TagPicker
+            label="Content warnings (optional)"
+            noun="content warnings"
+            tags={allTags?.warnings ?? null}
+            selected={warnings}
+            onChange={setWarnings}
           />
 
           {error && <ErrorText>{error}</ErrorText>}

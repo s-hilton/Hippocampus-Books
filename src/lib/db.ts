@@ -11,6 +11,8 @@ import type {
   ReadingStatus,
   Review,
   SeriesBook,
+  Tag,
+  TagCount,
   ShelfEntry,
 } from './types'
 
@@ -145,7 +147,20 @@ export function isInPile(book: CatalogBook, keys: Set<string>): boolean {
   return [book.id, book.open_library_id, book.isbn_13].some((k) => k && keys.has(k))
 }
 
-const REVIEW_FIELDS = 'id, book_id, rating, body, updated_at'
+const REVIEW_FIELDS = 'id, book_id, rating, body, updated_at, review_tags ( tag:tags ( kind, slug, name, category ) )'
+
+type ReviewRow = Omit<Review, 'tropes' | 'warnings'> & { review_tags: { tag: Tag | null }[] }
+
+function toReview(row: ReviewRow): Review {
+  const tags = row.review_tags.flatMap((rt) => (rt.tag ? [rt.tag] : []))
+  const byName = (a: Tag, b: Tag) => a.name.localeCompare(b.name)
+  const { review_tags: _, ...rest } = row
+  return {
+    ...rest,
+    tropes: tags.filter((t) => t.kind === 'trope').sort(byName),
+    warnings: tags.filter((t) => t.kind === 'content_warning').sort(byName),
+  }
+}
 
 export async function getShelf(): Promise<ShelfEntry[]> {
   const [shelf, reviews] = await Promise.all([
@@ -157,7 +172,7 @@ export async function getShelf(): Promise<ShelfEntry[]> {
   ])
   if (shelf.error) throw shelf.error
   if (reviews.error) throw reviews.error
-  const reviewByBook = new Map((reviews.data as Review[]).map((r) => [r.book_id, r]))
+  const reviewByBook = new Map((reviews.data as unknown as ReviewRow[]).map((r) => [r.book_id, toReview(r)]))
   type Row = Omit<ShelfEntry, 'book' | 'review'> & {
     book: Pick<BookRow, 'id' | 'open_library_id' | 'title' | 'cover_url' | 'book_authors'>
   }
@@ -180,17 +195,28 @@ export async function updateShelfEntry(id: string, changes: { status: ReadingSta
 }
 
 /**
- * Save a review: updates the existing one if there is one, otherwise creates it (only
- * allowed for books marked Read). Stars are required; empty text is stored as null.
+ * Save a review with its tropes and content warnings, in one step (the save_review
+ * database function). Creates the review if there isn't one (only allowed for books
+ * marked Read), otherwise updates it and replaces its tags.
  */
-export async function saveReview(input: { bookId: string; rating: number; body: string; existingId?: string }): Promise<Review> {
-  const body = input.body.trim() || null
-  const query = input.existingId
-    ? supabase.from('reviews').update({ rating: input.rating, body }).eq('id', input.existingId)
-    : supabase.from('reviews').insert({ book_id: input.bookId, rating: input.rating, body })
-  const { data, error } = await query.select(REVIEW_FIELDS).single()
+export async function saveReview(input: {
+  bookId: string
+  rating: number
+  body: string
+  tropes: string[] // slugs
+  warnings: string[] // slugs
+}): Promise<Review> {
+  const { data: id, error } = await supabase.rpc('save_review', {
+    p_book_id: input.bookId,
+    p_rating: input.rating,
+    p_body: input.body,
+    p_tropes: input.tropes,
+    p_warnings: input.warnings,
+  })
   if (error) throw error
-  return data as Review
+  const { data, error: readError } = await supabase.from('reviews').select(REVIEW_FIELDS).eq('id', id).single()
+  if (readError) throw readError
+  return toReview(data as unknown as ReviewRow)
 }
 
 export async function deleteReview(id: string): Promise<void> {
@@ -248,7 +274,7 @@ export function getBookLocal(routeId: string, opts?: { refresh?: boolean }): Pro
       return {
         local: { ...rowToCatalogBook(r), id: r.id, description: r.description, source: r.source },
         entry: (entry.data as BookLocalData['entry']) ?? null,
-        review: (review.data as Review | null) ?? null,
+        review: review.data ? toReview(review.data as unknown as ReviewRow) : null,
       }
     },
     opts,
@@ -351,4 +377,44 @@ export async function getSeries(name: string, authorKey: string): Promise<Series
   const statuses = new Map<string, ReadingStatus>()
   for (const entry of shelf) if (entry.book.open_library_id) statuses.set(entry.book.open_library_id, entry.status)
   return { books, statuses }
+}
+
+// ---------------------------------------------------------------------------
+// Tropes and content warnings
+// ---------------------------------------------------------------------------
+
+const PAGE = 1000 // Supabase returns at most 1,000 rows per request by default
+const tagsCache = memoAsync<{ tropes: Tag[]; warnings: Tag[] }>()
+
+/** Every trope and content warning, in list order. Loaded once per session. */
+export function getAllTags(): Promise<{ tropes: Tag[]; warnings: Tag[] }> {
+  return tagsCache.load('all', async () => {
+    const all: Tag[] = []
+    for (let from = 0; ; from += PAGE) {
+      const { data, error } = await supabase
+        .from('tags')
+        .select('kind, slug, name, category')
+        .order('kind')
+        .order('position')
+        .range(from, from + PAGE - 1)
+      if (error) throw error
+      all.push(...(data as Tag[]))
+      if (data.length < PAGE) break
+    }
+    return {
+      tropes: all.filter((t) => t.kind === 'trope'),
+      warnings: all.filter((t) => t.kind === 'content_warning'),
+    }
+  })
+}
+
+/** How many readers picked each trope / content warning for a book, most picked first. */
+export async function getCommunityTags(bookId: string): Promise<{ tropes: TagCount[]; warnings: TagCount[] }> {
+  const { data, error } = await supabase.rpc('book_tag_counts', { p_book_id: bookId })
+  if (error) throw error
+  const rows = (data as (Tag & { readers: number | string })[]).map((r) => ({ ...r, readers: Number(r.readers) }))
+  return {
+    tropes: rows.filter((r) => r.kind === 'trope'),
+    warnings: rows.filter((r) => r.kind === 'content_warning'),
+  }
 }
